@@ -1,0 +1,78 @@
+- **Service Configuration Patterns**
+  - Use environment variables for service hostnames and ports
+  - Default to Docker service names for inter-service communication
+  - Example from [config.py](mdc:backend/app/core/config.py):
+  ```python
+  # ✅ DO: Use service names for Docker inter-service communication
+  POSTGRES_HOST: str = "postgres"
+  REDIS_HOST: str = "redis"
+  MCP_HOST: str = os.getenv("MCP_HOST", "backend")
+  
+  # ❌ DON'T: Hardcode localhost for service communication
+  # MCP_WEBSOCKET_URL: str = "ws://localhost:8000/ws"
+  # MCP_HTTP_URL: str = "http://localhost:8000"
+  ```
+
+- **Environment Variable Configuration**
+  - Use descriptive environment variable names
+  - Provide sensible defaults for Docker environment
+  - Allow overrides for different environments
+  - Example pattern:
+  ```python
+  SERVICE_HOST: str = os.getenv("SERVICE_HOST", "service-name")
+  SERVICE_PORT: int = int(os.getenv("SERVICE_PORT", "8000"))
+  
+  @property
+  def SERVICE_URL(self) -> str:
+      return f"http://{self.SERVICE_HOST}:{self.SERVICE_PORT}"
+  ```
+
+- **Docker Service Names**
+  - Use consistent naming across development and test environments
+  - Append `-test` suffix for test services
+  - Examples:
+    - Development: `backend`, `redis`, `postgres`
+    - Testing: `backend-test`, `redis-test`, `postgres-test`
+
+- **Port Configuration**
+  - Use environment variables for port configuration
+  - Default to standard ports in Docker environment
+  - Example:
+  ```python
+  # Standard ports as defaults
+  POSTGRES_PORT: str = "5432"
+  REDIS_PORT: int = 6379
+  API_PORT: int = 8000
+  ```
+
+- **URL Construction**
+  - Use properties for URL construction
+  - Build URLs from host and port components
+  - Allow protocol configuration when needed
+  - Example:
+  ```python
+  @property
+  def SERVICE_URL(self) -> str:
+      protocol = "https" if self.USE_SSL else "http"
+      return f"{protocol}://{self.SERVICE_HOST}:{self.SERVICE_PORT}"
+  ```
+
+- **Testing Configuration**
+  - Use environment variables to override service names in tests
+  - Default to test service names in test environment
+  - Example:
+  ```python
+  # In test configuration
+  TEST_SERVER_HOST = os.getenv("TEST_SERVER_HOST", "backend-test")
+  TEST_SERVER_PORT = int(os.getenv("TEST_SERVER_PORT", "8000"))
+  ```
+
+- **Security Considerations**
+  - Don't expose internal service ports to host unnecessarily
+  - Use secure defaults for production environments
+  - Example:
+  ```python
+  # Production settings with secure defaults
+  REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD")
+  USE_SSL: bool = os.getenv("USE_SSL", "true").lower() == "true"
+  ``` 

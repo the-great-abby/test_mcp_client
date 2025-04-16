@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  backend-test:
+    build:
+      context: backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: mcp-chat-backend-test
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=test
+      - SECRET_KEY=test-secret-key
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_HOST=db-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=test_db
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - REDIS_MAX_CONNECTIONS=10
+      - REDIS_TIMEOUT=5
+      - DOCKER_SERVICE_HOST=backend-test
+      - DOCKER_SERVICE_PORT=8000
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8001:8000"  # Different port to avoid conflicts with dev environment
+    command: >
+      bash -c "pip install -e . &&
+               uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    networks:
+      - test-network
+    depends_on:
+      db-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  db-test:
+    image: postgres:15
+    container_name: mcp-chat-db-test
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=test_db
+    ports:
+      - "5433:5432"  # Different port to avoid conflicts with dev environment
+    networks:
+      - test-network
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  redis-test:
+    image: redis:7
+    container_name: mcp-chat-redis-test
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts with dev environment
+    networks:
+      - test-network
+    volumes:
+      - redis_test_data:/data
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  postgres_test_data:
+  redis_test_data: 

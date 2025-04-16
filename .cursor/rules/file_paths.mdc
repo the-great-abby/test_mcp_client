@@ -1,0 +1,109 @@
+- **Project Structure Reference**
+  - `/backend/` - Python FastAPI backend code
+    - `/app/` - Main application code
+    - `/tests/` - Test files
+    - `/migrations/` - Database migrations
+  - `/frontend/` - React/Next.js frontend code
+  - `/scripts/` - Development and utility scripts
+
+- **Common Path Patterns**
+  ```python
+  # ✅ DO: Use relative imports from project root
+  from app.core.config import Settings
+  from app.api.deps import get_current_user
+  
+  # ❌ DON'T: Use absolute paths or relative paths with dots
+  from ....app.core.config import Settings
+  from /backend/app/api/deps import get_current_user
+  ```
+
+- **Test File Locations**
+  - ✅ Place test files under `/backend/tests/`
+  - ✅ Mirror the structure of the code being tested
+  - ✅ Use `test_` prefix for test files
+  ```
+  /backend/
+    /app/
+      /api/
+        /v1/
+          auth.py
+    /tests/
+      /api/
+        /v1/
+          test_auth.py
+  ```
+
+- **Path Resolution in Different Contexts**
+  - **Docker Environment:**
+    - Use service-based paths: `/app/` is root in container
+    - Example: `/app/tests/test_websocket.py`
+  
+  - **Local Development:**
+    - Use project-relative paths: `/backend/` is root
+    - Example: `backend/tests/test_websocket.py`
+  
+  - **CI/CD Environment:**
+    - Use absolute paths from workspace root
+    - Example: `/workspace/backend/tests/test_websocket.py`
+
+- **Tool-Specific Path Handling**
+  - **pytest:**
+    ```python
+    # ✅ DO: Use pathlib for path manipulation
+    from pathlib import Path
+    test_dir = Path(__file__).parent
+    data_file = test_dir / "data" / "test.json"
+    ```
+  
+  - **Docker Compose:**
+    ```yaml
+    # ✅ DO: Use consistent volume mappings
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    ```
+
+- **Common Pitfalls**
+  - ❌ Mixing forward/backward slashes in paths
+  - ❌ Using hardcoded absolute paths
+  - ❌ Assuming current working directory
+  - ❌ Not handling path differences between environments
+
+- **Best Practices**
+  - ✅ Use `pathlib` for Python path operations
+  - ✅ Use environment variables for configurable paths
+  - ✅ Keep paths relative to project root
+  - ✅ Document path assumptions in README
+
+- **Path Translation Examples**
+  | Local Path | Docker Path | CI/CD Path |
+  |------------|-------------|------------|
+  | `backend/app/main.py` | `/app/app/main.py` | `/workspace/backend/app/main.py` |
+  | `backend/tests/test_websocket.py` | `/app/tests/test_websocket.py` | `/workspace/backend/tests/test_websocket.py` |
+  | `backend/data/test.json` | `/app/data/test.json` | `/workspace/backend/data/test.json` |
+
+- **Environment Variables for Path Configuration**
+  ```python
+  # ✅ DO: Use environment variables for flexible path configuration
+  import os
+  from pathlib import Path
+  
+  # Base paths
+  PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", os.path.dirname(os.path.dirname(__file__))))
+  DATA_DIR = Path(os.getenv("DATA_DIR", PROJECT_ROOT / "data"))
+  
+  # Derived paths
+  config_file = DATA_DIR / "config.json"
+  ```
+
+- **Cross-Platform Path Handling**
+  ```python
+  # ✅ DO: Use pathlib for cross-platform compatibility
+  from pathlib import Path
+  
+  # Works on Windows and Unix
+  config_path = Path("config") / "settings.json"
+  
+  # ❌ DON'T: Use string concatenation
+  config_path = "config" + "/" + "settings.json"  # Can fail on Windows
+  ``` 

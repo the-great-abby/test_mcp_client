@@ -1,0 +1,45 @@
+- **Environment Commands**
+  - **Status Check:** `make -f Makefile.ai ai-status`
+    - Shows running containers
+    - Database readiness
+    - Git status
+  
+  - **Environment Control**
+    ```bash
+    # Start/restart environment
+    make -f Makefile.ai ai-restart
+    
+    # Stop environment
+    make -f Makefile.ai ai-stop
+    
+    # Full cleanup
+    make -f Makefile.ai ai-down
+    ```
+
+- **Container Structure**
+  - **Backend Container**
+    - Port: 8000 (internal), 8001 (test)
+    - Environment variables in docker-compose.yml
+    - Mounts: `./backend:/app`
+  
+  - **Database Container**
+    - Port: 5432 (internal), 5433 (test)
+    - Database: `mcp_chat` (dev), `test_mcp_chat` (test)
+    - Healthcheck configured
+  
+  - **Redis Container**
+    - Port: 6379 (internal), 6380 (test)
+    - Persistent volume configured
+
+- **Best Practices**
+  - ✅ DO: Use health checks for critical services
+  - ✅ DO: Map different ports for test environment
+  - ✅ DO: Use volumes for persistent data
+  - ❌ DON'T: Hardcode credentials in Dockerfiles
+  - ❌ DON'T: Use latest tag for production
+
+- **Common Issues**
+  - Port conflicts: Check with `docker ps`
+  - Database connection: Use `ai-validate`
+  - Container health: Use `ai-status`
+  - Volume cleanup: Use `ai-down` with -v flag 

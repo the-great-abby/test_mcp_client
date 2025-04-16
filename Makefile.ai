@@ -1,0 +1,145 @@
+# AI-friendly Makefile
+# All commands return JSON output and include state management
+
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration
+
+# Helper function to format JSON output
+define json_output
+	printf '{"command":"%s","status":"%s","code":%d,"data":%s}\n' "$(1)" "$(2)" $(3) "$(4)"
+endef
+
+# Get current system status
+ai-status:
+	@services=$$(docker-compose -f docker-compose.test.yml ps --services 2>/dev/null | paste -sd "," - || echo ""); \
+	db_status=$$(docker-compose -f docker-compose.test.yml exec -T db-test pg_isready -q 2>/dev/null && echo "ready" || echo "not_ready"); \
+	containers=$$(docker-compose -f docker-compose.test.yml ps --services --filter "status=running" 2>/dev/null | wc -l | tr -d ' '); \
+	branch=$$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr -d '\n' || echo "unknown"); \
+	commit=$$(git rev-parse HEAD 2>/dev/null | tr -d '\n' || echo "unknown"); \
+	printf '{"command":"ai-status","status":"success","code":0,"data":{"services":"%s","database":"%s","containers_running":%s,"git_branch":"%s","last_commit":"%s"}}\n' \
+		"$$services" "$$db_status" "$$containers" "$$branch" "$$commit" 2>/dev/null
+
+# Build containers with progress tracking
+ai-build:
+	@echo '{"status": "starting", "action": "build", "message": "Starting build..."}'
+	@docker compose -f docker-compose.test.yml build
+	@echo '{"status": "complete", "action": "build", "message": "Build completed successfully"}'
+
+# Restart containers with state verification
+ai-restart:
+	@(docker-compose -f docker-compose.test.yml down >/dev/null 2>&1; \
+	docker-compose -f docker-compose.test.yml up -d >/dev/null 2>&1; \
+	sleep 5; \
+	healthy_count=$$(docker-compose -f docker-compose.test.yml ps --services --filter "health=healthy" | wc -l | tr -d ' '); \
+	total_count=$$(docker-compose -f docker-compose.test.yml ps --services | wc -l | tr -d ' '); \
+	if [ $$healthy_count -eq $$total_count ]; then \
+		$(call json_output,"ai-restart","success",0,"{\"healthy_containers\":$$healthy_count,\"total_containers\":$$total_count}"); \
+	else \
+		$(call json_output,"ai-restart","warning",0,"{\"healthy_containers\":$$healthy_count,\"total_containers\":$$total_count}"); \
+	fi) 2>/dev/null
+
+# Get logs with structured output
+ai-logs:
+	@(logs=$$(docker-compose -f docker-compose.test.yml logs --tail=100 2>&1 | sed 's/"/\\"/g' | tr '\n' ' '); \
+	$(call json_output,"ai-logs","success",0,"{\"logs\":\"$$logs\"}")) 2>/dev/null
+
+# Run tests with basic status reporting
+ai-test:
+	@echo '{"status": "starting", "action": "test", "message": "Running tests..."}'
+	@make -f Makefile.ai test-setup
+	docker compose -f docker-compose.test.yml exec -T backend-test pytest backend/tests -v
+	@echo '{"status": "complete", "action": "test", "message": "Tests complete"}'
+
+# Run migrations with state tracking
+ai-migrate:
+	@(output=$$(make migrate 2>&1 | sed 's/"/\\"/g'); \
+	exit_code=$$?; \
+	current_rev=$$(docker-compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d test_db -t -c 'SELECT version_num FROM alembic_version;' 2>/dev/null | tr -d ' ' || echo 'none'); \
+	$(call json_output,"ai-migrate","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\",\"current_revision\":\"$$current_rev\"}")) 2>/dev/null
+
+# Validate system state
+ai-validate:
+	@db_ready=$$(docker-compose -f docker-compose.test.yml exec -T db-test pg_isready -q 2>/dev/null && echo "true" || echo "false"); \
+	redis_ready=$$(docker-compose -f docker-compose.test.yml exec -T redis-test redis-cli ping >/dev/null 2>&1 && echo "true" || echo "false"); \
+	backend_ready=$$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8001/api/v1/health || echo "000"); \
+	printf '{"command":"ai-validate","status":"success","code":0,"data":{"database_ready":%s,"redis_ready":%s,"backend_status":"%s"}}\n' \
+		"$$db_ready" "$$redis_ready" "$$backend_ready" 2>/dev/null
+
+# Run specific WebSocket tests with detailed output
+ai-test-websocket:
+	@echo '{"status": "starting", "action": "test-websocket", "message": "Running WebSocket tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/test_websocket.py -v 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-websocket","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Run unit tests only
+ai-test-unit:
+	@echo '{"status": "starting", "action": "test-unit", "message": "Running unit tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/unit -v 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-unit","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Run integration tests only
+ai-test-integration:
+	@echo '{"status": "starting", "action": "test-integration", "message": "Running integration tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/integration -v 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-integration","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+test-setup:
+	@echo "# First terminate all connections to all databases"
+	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname NOT IN ('postgres') AND pid <> pg_backend_pid();"
+	@echo "# Drop test database if it exists"
+	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS test_db WITH (FORCE);"
+	@echo "# Drop enum from all databases"
+	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -t -A -c "\
+		SELECT datname FROM pg_database WHERE datname NOT IN ('template0', 'template1', 'postgres');" | \
+		while read db; do \
+			if [ ! -z "$$db" ]; then \
+				echo "Dropping messagerole enum from $$db"; \
+				docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d "$$db" -c "DROP TYPE IF EXISTS messagerole CASCADE;"; \
+				docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d "$$db" -c "SET search_path TO public; DROP TYPE IF EXISTS public.messagerole CASCADE;"; \
+			fi \
+		done
+	@echo "# Create test database"
+	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -c "CREATE DATABASE test_db TEMPLATE template0;"
+	@echo "# Run migrations"
+	docker compose -f docker-compose.test.yml exec -T backend-test alembic upgrade head
+
+# Stop containers with JSON output
+ai-stop:
+	@echo '{"status": "starting", "action": "stop", "message": "Stopping containers..."}'
+	@docker compose -f docker-compose.test.yml stop
+	@echo '{"status": "complete", "action": "stop", "message": "All containers stopped"}'
+
+# Clean with JSON output
+ai-clean:
+	@echo '{"status": "starting", "action": "clean", "message": "Cleaning project..."}'
+	@docker compose -f docker-compose.test.yml down -v
+	@echo '{"status": "complete", "action": "clean", "message": "Clean completed"}'
+
+# Down containers and remove volumes with JSON output
+ai-down:
+	@echo '{"status": "starting", "action": "down", "message": "Stopping and removing containers..."}'
+	@docker compose -f docker-compose.test.yml down -v
+	@echo '{"status": "complete", "action": "down", "message": "All containers stopped and volumes removed"}'
+
+# Default help command
+help:
+	@echo "Available AI-friendly commands:"
+	@echo "  make -f Makefile.ai ai-status     - Get current system status in JSON format"
+	@echo "  make -f Makefile.ai ai-build      - Build containers with progress tracking"
+	@echo "  make -f Makefile.ai ai-restart    - Restart containers with health checks"
+	@echo "  make -f Makefile.ai ai-logs       - Get structured log output"
+	@echo "  make -f Makefile.ai ai-test       - Run all tests with basic status reporting"
+	@echo "  make -f Makefile.ai ai-test-websocket - Run WebSocket tests specifically"
+	@echo "  make -f Makefile.ai ai-test-unit  - Run unit tests only"
+	@echo "  make -f Makefile.ai ai-test-integration - Run integration tests only"
+	@echo "  make -f Makefile.ai ai-migrate    - Run migrations with state tracking"
+	@echo "  make -f Makefile.ai ai-validate   - Validate system state"
+	@echo "  make -f Makefile.ai test-setup    - Set up test environment"
+	@echo "  make -f Makefile.ai ai-stop       - Stop containers"
+	@echo "  make -f Makefile.ai ai-clean      - Clean project"
+	@echo "  make -f Makefile.ai ai-down       - Stop and remove containers with volumes" 

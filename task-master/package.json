@@ -1,0 +1,25 @@
+{
+  "name": "mcp-task-master",
+  "version": "1.0.0",
+  "description": "Task Master CLI for MCP development",
+  "type": "module",
+  "scripts": {
+    "task-master": "node scripts/task-master.js",
+    "list": "task-master list",
+    "generate": "task-master generate",
+    "parse-prd": "node scripts/task-master.js parse-prd"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.3.1",
+    "figlet": "^1.7.0",
+    "boxen": "^7.1.1",
+    "gradient-string": "^2.0.2",
+    "cli-table3": "^0.6.3",
+    "ora": "^7.0.1"
+  },
+  "devDependencies": {
+    "claude-task-master": "latest"
+  }
+} 

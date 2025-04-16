@@ -1,0 +1,99 @@
+- **Environment Types**
+  - **Development**
+    ```yaml
+    # docker/dev/docker-compose.yml
+    services:
+      backend:    # localhost:8000
+      postgres:   # localhost:5432
+      redis:      # localhost:6379
+    network: default
+    ```
+
+  - **Test**
+    ```yaml
+    # docker-compose.test.yml
+    services:
+      backend-test:  # backend-test:8000 (internal), localhost:8001 (external)
+      db-test:      # db-test:5432 (internal), localhost:5433 (external)
+      redis-test:   # redis-test:6379 (internal), localhost:6380 (external)
+    network: test-network
+    ```
+
+  - **Production**
+    ```yaml
+    # docker-compose.prod.yml
+    services:
+      backend:    # Configured via env
+      postgres:   # Configured via env
+      redis:      # Configured via env
+    network: prod-network
+    ```
+
+- **Environment Resolution**
+  ```python
+  # ✅ DO: Use environment-specific service names
+  if settings.ENVIRONMENT == "test":
+      host = "db-test"
+      port = 5432  # Internal port
+  else:
+      host = "postgres"
+      port = 5432
+  
+  # ❌ DON'T: Hardcode environment-specific values
+  host = "localhost"  # Wrong! Use environment-aware configuration
+  ```
+
+- **Port Management**
+  - **Internal Ports** (within Docker network)
+    - Backend: Always 8000
+    - Postgres: Always 5432
+    - Redis: Always 6379
+  
+  - **External Ports** (host machine)
+    - Development
+      ```
+      backend  → 8000
+      postgres → 5432
+      redis    → 6379
+      ```
+    - Test
+      ```
+      backend  → 8001
+      postgres → 5433
+      redis    → 6380
+      ```
+
+- **Network Isolation**
+  - Development: Uses default network
+  - Test: Uses dedicated `test-network`
+  - Production: Uses dedicated `prod-network`
+  - ❌ DON'T: Cross-communicate between networks
+  - ✅ DO: Use proper service discovery within each network
+
+- **Environment Variables**
+  - **Development**
+    ```env
+    ENVIRONMENT=development
+    POSTGRES_HOST=postgres
+    REDIS_HOST=redis
+    ```
+  
+  - **Test**
+    ```env
+    ENVIRONMENT=test
+    POSTGRES_HOST=db-test
+    REDIS_HOST=redis-test
+    ```
+
+- **Common Mistakes**
+  - ❌ Using localhost instead of service names
+  - ❌ Using development ports in tests
+  - ❌ Mixing environment configurations
+  - ❌ Hardcoding environment-specific values
+
+- **Best Practices**
+  - ✅ Always use service names for internal communication
+  - ✅ Use environment variables for configuration
+  - ✅ Keep networks isolated
+  - ✅ Use internal ports in code
+  - ✅ Document port mappings 

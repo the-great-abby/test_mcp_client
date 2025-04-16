@@ -1,0 +1,60 @@
+- **WebSocket Endpoints**
+  - **Authentication Flow**
+    ```python
+    # ✅ DO: Use token authentication
+    ws_url = f"ws://localhost:8000/ws?token={token}"
+    
+    # ❌ DON'T: Send credentials in headers
+    ws_url = "ws://localhost:8000/ws"  # headers={"Authorization": token}
+    ```
+
+  - **Connection Management**
+    - ✅ DO: Implement proper connection cleanup
+    - ✅ DO: Handle reconnection logic
+    - ✅ DO: Use heartbeat mechanisms
+    - ❌ DON'T: Leave connections open indefinitely
+
+- **Message Format**
+  ```python
+  # ✅ DO: Use structured message format
+  message = {
+      "type": "chat_message",
+      "content": "Hello",
+      "timestamp": "2024-04-25T10:00:00Z"
+  }
+  
+  # ❌ DON'T: Send unstructured data
+  message = "Hello"  # Avoid plain strings
+  ```
+
+- **Error Handling**
+  - **Expected Errors**
+    - 1008: Authentication Required
+    - 1011: Server Error
+    - 4001: Invalid Message Format
+    - 4002: Rate Limit Exceeded
+
+  - **Response Format**
+    ```python
+    error_response = {
+        "code": 4001,
+        "message": "Invalid message format",
+        "details": {...}
+    }
+    ```
+
+- **Testing Patterns**
+  ```python
+  # ✅ DO: Test connection states
+  async def test_connection_states():
+      # 1. Test initial connection
+      # 2. Test authentication
+      # 3. Test disconnection
+      # 4. Test reconnection
+  
+  # ✅ DO: Test message handling
+  async def test_message_handling():
+      # 1. Test valid messages
+      # 2. Test invalid formats
+      # 3. Test edge cases
+  ``` 
