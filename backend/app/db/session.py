@@ -1,36 +1,64 @@
+from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
+
 from app.core.config import settings
-
 from app.db.base import Base
-
-# Build PostgreSQL URL from settings
-DATABASE_URL = f"postgresql+asyncpg://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
 
 # Create async engine
 engine = create_async_engine(
-    DATABASE_URL,
-    echo=True,
-    future=True,
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    echo=True
 )
 
 # Create async session factory
-SessionLocal = sessionmaker(
+AsyncSessionLocal = sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
 )
 
-async def get_async_session() -> AsyncSession:
+async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Get a database session."""
-    async with SessionLocal() as session:
+    async with AsyncSessionLocal() as session:
         try:
             yield session
         finally:
             await session.close()
 
-# Create tables asynchronously
-async def init_db():
+async def init_db() -> None:
     """Initialize the database."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all) 
+    try:
+        # Create test database if it doesn't exist
+        default_db_url = settings.SQLALCHEMY_DATABASE_URI.rsplit('/', 1)[0] + '/postgres'
+        default_engine = create_async_engine(
+            default_db_url,
+            isolation_level='AUTOCOMMIT'
+        )
+        
+        async with default_engine.connect() as conn:
+            # Check if database exists
+            result = await conn.execute(
+                text(f"SELECT 1 FROM pg_database WHERE datname = :dbname"),
+                {"dbname": settings.POSTGRES_DB}
+            )
+            if not result.scalar():
+                # Create database
+                await conn.execute(text(f'CREATE DATABASE "{settings.POSTGRES_DB}"'))
+        
+        await default_engine.dispose()
+        
+        # Create tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            
+    except Exception as e:
+        # Log error but don't raise - let the application handle database issues
+        print(f"Error initializing database: {str(e)}")
+        # If we're in test mode, we might want to raise the error
+        if settings.NODE_ENV == "test":
+            raise 

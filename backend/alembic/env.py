@@ -1,76 +1,56 @@
 import os
 import sys
 from pathlib import Path
+import asyncio # Import asyncio
 
 # Add the parent directory to Python path
 parent_dir = Path(__file__).parent.parent.absolute()
 sys.path.append(str(parent_dir))
-print(f"DEBUG: Python path: {sys.path}")
 
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import pool, engine_from_config # Add engine_from_config back
+from sqlalchemy.ext.asyncio import AsyncEngine # Import AsyncEngine
 from alembic import context
 
-# Prevent SQLAlchemy from creating types during model import
-os.environ['PREVENT_SQLALCHEMY_TYPE_CREATION'] = 'true'
-
-print("DEBUG: Importing models...")
-# Import all models here
-from app.db.session import Base
-from app.models import User, Conversation, Message, Context
-
-print("DEBUG: Models imported")
-print(f"DEBUG: Base tables: {Base.metadata.tables.keys()}")
+# Import settings and Base
+from app.core.config import settings
+from app.db.base import Base
 
 # Print environment variables for debugging
-print("DEBUG: Environment variables in env.py:")
-print(f"SQLALCHEMY_DATABASE_URL: {os.getenv('SQLALCHEMY_DATABASE_URL')}")
+print("DEBUG: Environment variables:")
+print(f"POSTGRES_USER: {os.getenv('POSTGRES_USER', 'postgres')}")
+print(f"POSTGRES_PASSWORD: {os.getenv('POSTGRES_PASSWORD', 'postgres')}")
+print(f"POSTGRES_HOST: {os.getenv('POSTGRES_HOST', 'postgres')}")
+print(f"POSTGRES_PORT: {os.getenv('POSTGRES_PORT', '5432')}")
+print(f"POSTGRES_DB: {os.getenv('POSTGRES_DB', 'mcp_chat')}")
+
+# Get database URL from settings
+database_url = settings.SQLALCHEMY_DATABASE_URI
+print(f"DEBUG: Database URL from settings: {database_url}")
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
 
-# Set the SQLAlchemy URL from environment variable
-postgres_url = os.getenv('SQLALCHEMY_DATABASE_URL')
-if not postgres_url:
-    # Fallback to constructing URL from individual variables
-    postgres_url = f"postgresql://{os.getenv('POSTGRES_USER', 'postgres')}:{os.getenv('POSTGRES_PASSWORD', 'postgres')}@{os.getenv('POSTGRES_HOST', 'postgres')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'mcp_chat')}"
-
-print(f"DEBUG: Using database URL: {postgres_url}")
-config.set_main_option("sqlalchemy.url", postgres_url)
+# Set the SQLAlchemy URL
+# Important: Alembic usually needs a sync URL format for its own operations,
+# but we need the app's Base metadata. We'll handle the engine creation
+# for the online run separately using the async URL.
+config.set_main_option("sqlalchemy.url", database_url.replace("+asyncpg", "")) 
+print(f"DEBUG: Config URL set for Alembic (sync): {config.get_main_option('sqlalchemy.url')}")
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
-print(f"DEBUG: Target metadata tables: {target_metadata.tables.keys()}")
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
-
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
-    url = config.get_main_option("sqlalchemy.url")
+    """Run migrations in 'offline' mode."""
+    # Use the sync URL for offline mode
+    url = config.get_main_option("sqlalchemy.url") 
     print(f"DEBUG: URL in offline mode: {url}")
     context.configure(
         url=url,
@@ -82,35 +62,32 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
+def do_run_migrations(connection):
+    context.configure(connection=connection, target_metadata=target_metadata)
 
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
+    with context.begin_transaction():
+        context.run_migrations()
 
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-    configuration = config.get_section(config.config_ini_section)
-    configuration["sqlalchemy.url"] = postgres_url
-    print(f"DEBUG: URL in online mode: {configuration['sqlalchemy.url']}")
-    print(f"DEBUG: Target metadata tables before connect: {target_metadata.tables.keys()}")
-    
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
+async def run_migrations_online() -> None:
+    """Run migrations in 'online' mode using an async engine."""
+    # Use the async URL from settings directly
+    connectable = AsyncEngine(
+        engine_from_config(
+            config.get_section(config.config_ini_section),
+            url=database_url, # Use the ASYNC url here
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+            future=True, # Ensure future=True for AsyncEngine
         )
+    )
+    print(f"DEBUG: Connecting with ASYNC URL for online migration: {database_url}")
 
-        with context.begin_transaction():
-            context.run_migrations()
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
 
+    await connectable.dispose()
 
 if context.is_offline_mode():
     run_migrations_offline()
 else:
-    run_migrations_online()
+    asyncio.run(run_migrations_online()) # Use asyncio.run

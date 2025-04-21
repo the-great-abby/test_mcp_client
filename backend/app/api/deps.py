@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.redis import RedisClient
 
-from app.db.session import SessionLocal
+from app.db.session import AsyncSessionLocal
 from app.core.redis import get_redis_client
 
 
@@ -14,7 +14,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     Yields:
         AsyncSession: The database session.
     """
-    async with SessionLocal() as session:
+    async with AsyncSessionLocal() as session:
         yield session
 
 async def get_redis() -> AsyncGenerator[RedisClient, None]:

@@ -3,10 +3,12 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import os
-from app.db.session import Base
+from app.db.base import Base
+from app.models.context import Context
 
 class MessageRole(str, Enum):
     USER = "user"
@@ -35,7 +37,7 @@ class Message(Base):
         nullable=False
     )
     user_id = Column(
-        Integer,
+        UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
     )

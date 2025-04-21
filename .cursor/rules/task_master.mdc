@@ -1,0 +1,111 @@
+# Task Master CLI Usage
+
+- **Overview**
+  - Command-line interface for task management
+  - Task breakdown and tracking
+  - Complexity analysis and planning
+  - Development workflow automation
+
+- **Installation and Setup**
+  - **Global Installation**
+    ```bash
+    npm install -g claude-task-master
+    ```
+  - **Local Usage**
+    ```bash
+    npx task-master <command>
+    ```
+  - **Project Initialization**
+    ```bash
+    task-master init
+    # or
+    task-master parse-prd --input=<prd-file.txt>
+    ```
+
+- **Core Commands**
+  - **Task Management**
+    ```bash
+    # List all tasks
+    task-master list [--status=<status>] [--with-subtasks]
+
+    # Show task details
+    task-master show <id>
+
+    # Update task status
+    task-master set-status --id=<id> --status=<status>
+
+    # Add new task
+    task-master add-task --prompt="<description>"
+    ```
+
+  - **Task Analysis**
+    ```bash
+    # Analyze complexity
+    task-master analyze-complexity [--research]
+
+    # View complexity report
+    task-master complexity-report
+
+    # Expand task into subtasks
+    task-master expand --id=<id> [--research]
+    ```
+
+  - **Dependency Management**
+    ```bash
+    # Add dependency
+    task-master add-dependency --id=<id> --depends-on=<id>
+
+    # Remove dependency
+    task-master remove-dependency --id=<id> --depends-on=<id>
+
+    # Validate dependencies
+    task-master validate-dependencies
+    ```
+
+- **Environment Configuration**
+  - **Required Variables**
+    ```bash
+    ANTHROPIC_API_KEY=sk-ant-api03-...  # Claude API key
+    ```
+
+  - **Optional Settings**
+    ```bash
+    MODEL=claude-3-opus-20240229        # Model selection
+    MAX_TOKENS=8000                     # Response length
+    TEMPERATURE=0.7                     # Response creativity
+    DEBUG=true                          # Debug logging
+    ```
+
+- **Best Practices**
+  - ✅ DO: Initialize project with `task-master init`
+  - ✅ DO: Use research flag for complex tasks
+  - ✅ DO: Maintain clean dependency chains
+  - ✅ DO: Review complexity reports regularly
+  - ❌ DON'T: Skip dependency validation
+  - ❌ DON'T: Ignore complexity warnings
+  - ❌ DON'T: Leave tasks without test strategies
+  - ❌ DON'T: Create circular dependencies
+
+- **Common Workflows**
+  - **Starting New Project**
+    1. Run `task-master init`
+    2. Parse PRD if available
+    3. Review initial task structure
+    4. Analyze task complexity
+
+  - **Daily Development**
+    1. List pending tasks
+    2. Check next available task
+    3. Expand if needed
+    4. Update status on completion
+
+  - **Task Breakdown**
+    1. Analyze task complexity
+    2. Expand complex tasks
+    3. Add dependencies
+    4. Validate structure
+
+- **References**
+  - [meta.mdc](mdc:.cursor/rules/meta.mdc) for rule structure
+  - [dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc) for workflow integration
+  - Task Master CLI documentation 

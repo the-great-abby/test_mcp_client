@@ -1,9 +1,12 @@
 from typing import Any, Optional, Literal, List, Union
 import os
 from pydantic_settings import BaseSettings
-from pydantic import validator, AnyHttpUrl
+from pydantic import validator, AnyHttpUrl, Field, ConfigDict
+from pydantic.networks import PostgresDsn
 
 class Settings(BaseSettings):
+    model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="allow")
+
     PROJECT_NAME: str = "MCP Chat"
     DEBUG: bool = False
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
@@ -22,10 +25,58 @@ class Settings(BaseSettings):
     
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        # For test environment, use SQLite if TEST_DB is set to "sqlite"
-        if os.getenv("TEST_DB") == "sqlite":
-            return "sqlite+aiosqlite:///:memory:"
-        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        """Get the database URI, either from DATABASE_URL or individual components."""
+        print("DEBUG: Checking for DATABASE_URL environment variable...")
+        if database_url := os.getenv("DATABASE_URL"):
+            print(f"DEBUG: Found DATABASE_URL={database_url}")
+            # Ensure +asyncpg is added if missing, for safety
+            if "+asyncpg" not in database_url:
+                if "postgresql://" in database_url:
+                    database_url = database_url.replace("postgresql://", "postgresql+asyncpg://")
+                    print(f"DEBUG: Modified DATABASE_URL to add +asyncpg: {database_url}")
+                elif "postgres://" in database_url:
+                     database_url = database_url.replace("postgres://", "postgresql+asyncpg://")
+                     print(f"DEBUG: Modified legacy DATABASE_URL to add +asyncpg: {database_url}")
+
+            final_url = database_url.replace("postgres://", "postgresql://") # Keep original replacement for legacy postgres://
+            print(f"DEBUG: Returning URI from DATABASE_URL env var: {final_url}")
+            return final_url
+
+        print("DEBUG: DATABASE_URL not set, building DSN...")
+        # Build the DSN with proper parameter names for Pydantic v2
+        dsn = PostgresDsn.build(
+            scheme="postgresql+asyncpg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_HOST,
+            port=int(self.POSTGRES_PORT),
+            path=self.POSTGRES_DB  # Removed leading slash
+        )
+        final_url = str(dsn)
+        print(f"DEBUG: Returning URI built from DSN: {final_url}")
+        return final_url
+    
+    @property
+    def DATABASE_URL(self) -> str:
+        """Alias for SQLALCHEMY_DATABASE_URI for backward compatibility."""
+        return self.SQLALCHEMY_DATABASE_URI
+    
+    @property
+    def TEST_DATABASE_URL(self) -> str:
+        """Get the test database URL."""
+        if database_url := os.getenv("TEST_DATABASE_URL"):
+            return database_url.replace("postgres://", "postgresql://")
+
+        # Build the DSN with proper parameter names for Pydantic v2
+        dsn = PostgresDsn.build(
+            scheme="postgresql+asyncpg",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_HOST,
+            port=int(self.POSTGRES_PORT),
+            path="test_mcp_chat"  # Removed leading slash
+        )
+        return str(dsn)
     
     # Redis
     REDIS_HOST: str = os.getenv("REDIS_HOST", "redis-test")  # Default to docker-compose service name
@@ -93,9 +144,5 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[AnyHttpUrl] = [
         "http://localhost:3000"  # React frontend
     ]
-    
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 settings = Settings() 

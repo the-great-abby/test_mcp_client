@@ -11,7 +11,6 @@ import asyncio
 from app.core.config import settings
 from app.core.auth import verify_token
 from jose.exceptions import JWTError as jose_exceptions
-import time
 
 from app.core.websocket import manager, ChatMessage
 from app.core.auth import get_current_user
@@ -28,58 +27,61 @@ logger.setLevel(logging.DEBUG)
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(None)):
     """WebSocket endpoint handling real-time chat communication."""
-    client_id = None  # Initialize client_id at the start
-    
     logger.debug(f"WebSocket connection attempt with token: {'present' if token else 'missing'}")
     
+    client_id = None
+    user_id = None
+    last_typing_time = 0
+    
     try:
+        # Accept the connection first so we can send error messages
+        logger.debug("Attempting to accept WebSocket connection")
+        await websocket.accept()
+        logger.debug("WebSocket connection accepted")
+        
+        # Check for token in query param or Authorization header
         if not token:
-            logger.warning("WebSocket connection rejected: no token provided")
-            await websocket.close(code=1000, reason="Authentication required")
+            # Try to get token from Authorization header
+            auth_header = websocket.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+            
+        # Require authentication for all connections
+        if not token:
+            logger.debug("No token provided, closing connection")
+            await websocket.close(code=1008, reason="Authentication required")
             return
             
-        # Verify token and get user_id
-        logger.debug("Attempting to verify token...")
         try:
-            payload = await verify_token(token)
-            user_id = payload.get("sub")
-            if not user_id:
-                logger.warning("WebSocket connection rejected: no user_id in token")
-                await websocket.close(code=1000, reason="Authentication failed")
-                return
-        except jose_exceptions as e:
-            logger.warning(f"WebSocket connection rejected: {str(e)}")
-            await websocket.close(code=1000, reason="Authentication failed")
+            logger.debug("Verifying token")
+            payload = await verify_token(token)  # This will raise JWTError if invalid
+            user_id = str(payload["sub"])  # Now we can safely access sub
+            logger.debug(f"Token verified, user_id: {user_id}")
+        except jwt.ExpiredSignatureError:
+            logger.debug("Token has expired")
+            await websocket.close(code=1008, reason="Token has expired")
             return
-                
-        logger.info(f"Token verified successfully for user_id: {user_id}")
-                
-        # Accept connection
-        logger.debug("Accepting WebSocket connection...")
-        await websocket.accept()
-        
-        # Generate client ID and connect to manager
+        except jwt.InvalidTokenError:
+            logger.debug("Invalid token")
+            await websocket.close(code=1008, reason="Invalid token format")
+            return
+        except Exception as e:
+            logger.error(f"Authentication error: {str(e)}", exc_info=True)
+            await websocket.close(code=1008, reason="Authentication failed")
+            return
+            
+        # Connect to WebSocket manager
         client_id = str(uuid4())
-        logger.info(f"New WebSocket connection: client_id={client_id}, user_id={user_id}")
+        logger.debug(f"Generated client_id: {client_id}")
         
         if not await manager.connect(client_id, websocket, user_id):
             logger.error(f"Failed to connect client {client_id} to manager")
             await websocket.close(code=1000, reason="Connection rejected: too many connections")
             return
-                
-        logger.info(f"Client {client_id} connected successfully")
+            
+        logger.debug(f"Client {client_id} connected successfully")
         
-        # Send welcome message
-        await manager.send_message(
-            client_id,
-            ChatMessage(
-                type="welcome",
-                content="Connected to chat server",
-                metadata={"client_id": client_id}
-            )
-        )
-        
-        # Main message handling loop
+        # Main message handling loop - welcome message already sent by manager.connect()
         while True:
             try:
                 data = await websocket.receive_json()
@@ -133,7 +135,7 @@ async def websocket_endpoint(websocket: WebSocket, token: Optional[str] = Query(
                         metadata={
                             "client_id": client_id,
                             "user_id": user_id,
-                            "timestamp": data.get("metadata", {}).get("timestamp", str(time.time()))
+                            "timestamp": data.get("metadata", {}).get("timestamp")
                         }
                     )
                     # Send response back to sender first

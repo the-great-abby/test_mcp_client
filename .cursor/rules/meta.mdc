@@ -4,3 +4,88 @@ globs:
 alwaysApply: false
 ---
  
+# Rule Organization and Maintenance
+
+- **Rule Categories**
+  - Core Rules: Fundamental patterns (meta.mdc, cursor_rules.mdc)
+  - Language Rules: Language-specific patterns (typescript.mdc, python.mdc)
+  - Framework Rules: Framework guidelines (react.mdc, fastapi.mdc)
+  - Tool Rules: Development tools (docker.mdc, task_master.mdc)
+  - Project Rules: Project conventions (api.mdc, testing.mdc)
+  - Operational Rules: System operations (terminal.mdc, testing_flow.mdc)
+
+- **Required Rule Structure**
+  ```markdown
+  ---
+  description: Clear purpose statement
+  globs: path/to/files/*.ext
+  alwaysApply: boolean
+  ---
+
+  # Rule Title
+
+  - **Overview**
+    - Purpose and scope
+    - When it applies
+    - Key principles
+
+  - **Guidelines**
+    - Requirements
+    - Best practices
+    - Anti-patterns
+
+  - **Examples**
+    - Good and bad examples
+    - Real code references
+    - Common scenarios
+
+  - **References**
+    - Related documentation
+    - Other rules
+    - External resources
+  ```
+
+- **Rule Maintenance**
+  - Monthly review all rules
+  - Quarterly review core rules
+  - Update on pattern changes
+  - Archive obsolete rules
+  - Track changes in git
+  - Test rules in practice
+
+- **Best Practices**
+  - ✅ DO: Keep rules focused
+  - ✅ DO: Use real examples
+  - ✅ DO: Update regularly
+  - ✅ DO: Cross-reference
+  - ❌ DON'T: Duplicate info
+  - ❌ DON'T: Leave outdated
+  - ❌ DON'T: Over-complicate
+  - ❌ DON'T: Ignore exceptions
+
+- **Documentation**
+  - Use markdown formatting
+  - Include code blocks
+  - Add file references
+  - Maintain versions
+  - Document changes
+  - Link related rules
+
+- **Operational Guidelines**
+  - **Terminal Management**
+    - Watch for capital letters at end of command sequences
+    - Request Cursor restart when terminal shows signs of corruption
+    - Use fresh terminal instances for new command sequences
+    - Monitor command output for unusual formatting
+
+  - **Testing Workflow**
+    - Utilize Makefile.ai commands for test sequences
+    - Leverage AI-optimized commands for faster iterations
+    - Follow consistent test-debug-retest patterns
+    - Keep test environment clean between runs
+
+  - **Troubleshooting**
+    - Restart Cursor when terminal shows corruption signs
+    - Clean test environment before new test runs
+    - Use appropriate Makefile.ai commands
+    - Document any recurring issues 

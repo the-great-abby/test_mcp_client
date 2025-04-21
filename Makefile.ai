@@ -1,7 +1,7 @@
 # AI-friendly Makefile
 # All commands return JSON output and include state management
 
-.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage
 
 # Helper function to format JSON output
 define json_output
@@ -46,7 +46,7 @@ ai-logs:
 ai-test:
 	@echo '{"status": "starting", "action": "test", "message": "Running tests..."}'
 	@make -f Makefile.ai test-setup
-	docker compose -f docker-compose.test.yml exec -T backend-test pytest backend/tests -v
+	docker compose -f docker-compose.test.yml exec -T backend-test pytest tests -v
 	@echo '{"status": "complete", "action": "test", "message": "Tests complete"}'
 
 # Run migrations with state tracking
@@ -76,7 +76,7 @@ ai-test-websocket:
 ai-test-unit:
 	@echo '{"status": "starting", "action": "test-unit", "message": "Running unit tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/unit -v 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests -v 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-unit","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -87,6 +87,21 @@ ai-test-integration:
 	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/integration -v 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-integration","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Run tests with coverage reporting
+ai-test-coverage:
+	@echo '{"status": "starting", "action": "test-coverage", "message": "Running tests with coverage..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest \
+		--cov=app \
+		--cov-report=term-missing \
+		--cov-report=html \
+		--cov-fail-under=80 \
+		-v tests/ 2>&1); \
+	exit_code=$$?; \
+	coverage=$$(echo "$$output" | grep "TOTAL" | awk '{print $$4}' || echo "0"); \
+	$(call json_output,"ai-test-coverage","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,\
+		"{\"coverage\":\"$$coverage\",\"output\":\"$${output}\"}")) 2>/dev/null
 
 test-setup:
 	@echo "# First terminate all connections to all databases"
@@ -142,4 +157,5 @@ help:
 	@echo "  make -f Makefile.ai test-setup    - Set up test environment"
 	@echo "  make -f Makefile.ai ai-stop       - Stop containers"
 	@echo "  make -f Makefile.ai ai-clean      - Clean project"
-	@echo "  make -f Makefile.ai ai-down       - Stop and remove containers with volumes" 
+	@echo "  make -f Makefile.ai ai-down       - Stop and remove containers with volumes"
+	@echo "  make -f Makefile.ai ai-test-coverage - Run tests with coverage reporting" 

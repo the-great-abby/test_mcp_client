@@ -76,42 +76,45 @@ class WebSocketManager:
             if user_id:
                 self.user_connections[user_id].add(client_id)
                 logger.debug(f"Added client {client_id} to user {user_id} connections")
-                
+            
             # 1. Send welcome message first
-            await self.send_message(
-                client_id,
-                ChatMessage(
-                    type="welcome",
-                    content="Welcome to the chat!",
-                    metadata={"client_id": client_id, "user_id": user_id} if user_id else {"client_id": client_id}
-                )
+            logger.debug("Sending welcome message...")
+            welcome_msg = ChatMessage(
+                type="welcome",
+                content="Welcome to the chat!",
+                metadata={"client_id": client_id}
             )
+            logger.debug(f"Welcome message type: {welcome_msg.type}")
+            await self.send_message(client_id, welcome_msg)
+            logger.debug("Welcome message sent")
             
             # 2. Send message history if any exists
             if self.message_history:
-                await self.send_message(
-                    client_id,
-                    ChatMessage(
-                        type="history",
-                        content="",
-                        metadata={"messages": [msg.to_dict() for msg in self.message_history]}
-                    )
+                logger.debug("Sending history message...")
+                history_msg = ChatMessage(
+                    type="history",
+                    content="",
+                    metadata={"messages": [msg.to_dict() for msg in self.message_history]}
                 )
+                logger.debug(f"History message type: {history_msg.type}")
+                await self.send_message(client_id, history_msg)
+                logger.debug("History message sent")
             
             # 3. Send presence update to other clients
             if user_id:
-                await self.broadcast(
-                    ChatMessage(
-                        type="presence",
-                        content="",
-                        metadata={
-                            "client_id": client_id,
-                            "user_id": user_id,
-                            "status": "connected"
-                        }
-                    ),
-                    exclude={client_id}  # Don't send to the connecting client
+                logger.debug("Sending presence update...")
+                presence_msg = ChatMessage(
+                    type="presence",
+                    content="",
+                    metadata={
+                        "client_id": client_id,
+                        "user_id": user_id,
+                        "status": "connected"
+                    }
                 )
+                logger.debug(f"Presence message type: {presence_msg.type}")
+                await self.broadcast(presence_msg, exclude={client_id})
+                logger.debug("Presence update sent")
             
             return True
             

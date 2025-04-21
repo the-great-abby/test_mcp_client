@@ -1,0 +1,68 @@
+# Testing Workflow Guidelines
+
+- **Overview**
+  - Efficient testing patterns using Makefile.ai
+  - Test-debug-retest cycle optimization
+  - Environment management for testing
+  - AI-assisted testing workflows
+
+- **Makefile.ai Usage**
+  - **When to Use**
+    - During active test-debug cycles
+    - For repetitive test sequences
+    - When testing specific components
+    - In CI/CD pipeline development
+
+  - **Common Commands**
+    ```makefile
+    # Run all tests with AI optimization
+    make ai-test
+
+    # Run specific test suite
+    make ai-test-suite SUITE=auth
+
+    # Clean and rebuild test environment
+    make ai-test-clean
+    ```
+
+- **Testing Workflow Patterns**
+  - **Test-Debug Cycle**
+    1. Run initial test suite
+    2. Analyze failures with AI assistance
+    3. Apply fixes using AI suggestions
+    4. Rerun affected tests
+    5. Verify fixes and coverage
+
+  - **Environment Management**
+    - Clean environment between major changes
+    - Use isolated test databases
+    - Reset state before each test run
+    - Maintain consistent test data
+
+- **Best Practices**
+  - ✅ DO: Use Makefile.ai commands for consistency
+  - ✅ DO: Clean environment between test runs
+  - ✅ DO: Follow the test-debug-retest pattern
+  - ✅ DO: Leverage AI optimization features
+  - ❌ DON'T: Skip environment cleanup
+  - ❌ DON'T: Mix test and development environments
+  - ❌ DON'T: Ignore AI suggestions
+  - ❌ DON'T: Reuse contaminated test states
+
+- **Examples**
+  ```bash
+  # Good: Clean test cycle
+  $ make ai-test-clean
+  $ make ai-test
+  $ make ai-test-suite SUITE=auth
+
+  # Bad: Mixing environments
+  $ python -m pytest
+  $ make ai-test
+  $ npm test
+  ```
+
+- **References**
+  - [meta.mdc](mdc:.cursor/rules/meta.mdc) for rule structure
+  - [terminal.mdc](mdc:.cursor/rules/terminal.mdc) for terminal management
+  - Makefile.ai documentation for command details 

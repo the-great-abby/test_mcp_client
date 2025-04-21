@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from redis.asyncio import Redis
 from typing import Dict
-from fastapi.responses import JSONResponse
 import logging
+from sqlalchemy import text
 
 from app.db.base import get_db
 from app.core.redis import get_redis
@@ -15,49 +16,32 @@ logger = logging.getLogger(__name__)
 async def health_check(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
-) -> Dict[str, str]:
+) -> JSONResponse:
     """
     Health check endpoint that checks database and Redis connectivity.
+    Returns appropriate status codes based on component health.
     """
-    status = "healthy"
-    db_status = "healthy"
-    redis_status = "healthy"
-    db_error = None
-    redis_error = None
+    response = {
+        "status": "healthy",
+        "components": {
+            "database": "healthy",
+            "redis": "healthy"
+        }
+    }
+    status_code = status.HTTP_200_OK
 
-    # Check database connection
     try:
-        await db.execute("SELECT 1")
+        await db.execute(text("SELECT 1"))
     except Exception as e:
-        status = "unhealthy"
-        db_status = "unhealthy"
-        db_error = str(e)
-        logger.error(f"Database health check failed: {e}")
+        response["status"] = "unhealthy"
+        response["components"]["database"] = f"unhealthy: {str(e)}"
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
-    # Check Redis connection
     try:
         await redis.ping()
     except Exception as e:
-        status = "unhealthy"
-        redis_status = "unhealthy"
-        redis_error = str(e)
-        logger.error(f"Redis health check failed: {e}")
+        response["status"] = "unhealthy"
+        response["components"]["redis"] = f"unhealthy: {str(e)}"
+        status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
-    response = {
-        "status": status,
-        "details": {
-            "database": {
-                "status": db_status,
-                "error": db_error
-            },
-            "redis": {
-                "status": redis_status,
-                "error": redis_error
-            }
-        }
-    }
-
-    return JSONResponse(
-        status_code=503 if status == "unhealthy" else 200,
-        content=response
-    ) 
+    return JSONResponse(content=response, status_code=status_code)

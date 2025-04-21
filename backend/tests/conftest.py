@@ -20,13 +20,14 @@ from starlette.middleware.exceptions import ExceptionMiddleware
 import os
 import sys
 from pathlib import Path
+import json
+from unittest.mock import AsyncMock
 
 from app.core.errors import (
     AppError,
     NotFoundError,
-    DataValidationError,
+    ValidationError,
     app_error_handler,
-    not_found_error_handler,
     validation_error_handler,
     generic_error_handler,
     setup_error_handlers
@@ -34,10 +35,11 @@ from app.core.errors import (
 from app.api.router import router
 from app.db.base import Base
 from app.core.monitoring import RateLimiter, TelemetryService
-from app.core.config import settings
+from app.core.config import settings, Settings
 from app.core.redis import RedisClient
 from app.api.deps import get_db, get_redis
 from app.main import app as main_app
+from app.core.websocket import WebSocketManager
 
 # Configure logging for tests
 def setup_test_logging():
@@ -79,13 +81,25 @@ POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "db-test")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "test_db")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "test_mcp_chat")
 
 # Use SQLite for local testing, PostgreSQL for Docker tests
 TEST_SQLALCHEMY_DATABASE_URL = (
     "sqlite+aiosqlite:///:memory:"
     if os.getenv("TEST_DB") == "sqlite"
     else f"postgresql+asyncpg://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+)
+
+# Override settings for testing
+test_settings = Settings(
+    POSTGRES_USER=POSTGRES_USER,
+    POSTGRES_PASSWORD=POSTGRES_PASSWORD,
+    POSTGRES_HOST=POSTGRES_HOST,
+    POSTGRES_PORT=POSTGRES_PORT,
+    POSTGRES_DB=POSTGRES_DB,
+    SQLALCHEMY_DATABASE_URI=TEST_SQLALCHEMY_DATABASE_URL,  # Set both for compatibility
+    DATABASE_URL=TEST_SQLALCHEMY_DATABASE_URL,
+    NODE_ENV="test"  # Ensure we're in test mode
 )
 
 # Test Redis URL
@@ -127,7 +141,7 @@ async def test_not_found():
 @test_router.get("/test/validation-error")
 async def test_validation_error():
     """Test endpoint that raises a ValidationError."""
-    raise DataValidationError("Invalid data", errors={"field": "error"})
+    raise ValidationError("Invalid data", errors={"field": "error"})
 
 @test_router.get("/test/generic-error")
 async def test_generic_error():
@@ -151,63 +165,117 @@ def event_loop() -> Generator:
     yield loop
     loop.close()
 
+@pytest_asyncio.fixture(scope="session")
+async def test_engine() -> AsyncEngine:
+    """Create a test database engine."""
+    engine = create_async_engine(
+        TEST_SQLALCHEMY_DATABASE_URL,
+        echo=True,
+        future=True,
+        poolclass=NullPool  # Disable connection pooling for tests
+    )
+    
+    yield engine
+    await engine.dispose()
+
+@pytest_asyncio.fixture(autouse=True)
+async def setup_test_db(test_engine: AsyncEngine) -> None:
+    """Set up test database before tests."""
+    try:
+        # Drop all tables
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+        
+        # Create all tables
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            
+        yield
+        
+        # Clean up after tests
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+    except Exception as e:
+        print(f"Error setting up test database: {str(e)}")
+        raise
+
 @pytest_asyncio.fixture
-async def app(redis_client: RedisClient) -> FastAPI:
-    """Create a FastAPI test application."""
-    # Override settings for testing
-    from app.core.config import settings
-    settings.WS_PING_TIMEOUT = 1  # Shorter timeout for tests
-    settings.WS_MAX_HISTORY_SIZE = 10  # Smaller history size for tests
-    settings.WS_MAX_CONNECTIONS_PER_USER = 3  # Fewer connections for tests
-    settings.WS_RATE_LIMIT = 10  # Lower rate limit for tests
+async def db(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
+    """Get a database session for testing."""
+    async_session = sessionmaker(
+        test_engine, class_=AsyncSession, expire_on_commit=False
+    )
     
-    app = FastAPI(debug=False)  # Explicitly disable debug mode
+    async with async_session() as session:
+        yield session
+        await session.rollback()
+        await session.close()
+
+@pytest.fixture
+def websocket_manager() -> WebSocketManager:
+    """Create a fresh WebSocket manager for each test."""
+    manager = WebSocketManager()
+    yield manager
+    # Clean up after test
+    manager.message_history.clear()
+    manager.message_by_id.clear()
+    manager.active_connections.clear()
+    manager.connection_metadata.clear()
+    manager.user_connections.clear()
+
+@pytest_asyncio.fixture
+async def manager(websocket_manager: WebSocketManager, redis_client: RedisClient) -> WebSocketManager:
+    """Configure WebSocket manager with Redis client and attach to app state."""
+    websocket_manager.redis_client = redis_client
+    # Clear any existing state
+    websocket_manager.message_history.clear()
+    websocket_manager.message_by_id.clear()
+    websocket_manager.active_connections.clear()
+    websocket_manager.connection_metadata.clear()
+    websocket_manager.user_connections.clear()
+    return websocket_manager
+
+@pytest.fixture
+def test_client(app: FastAPI) -> TestClient:
+    """Create a test client that supports WebSocket connections."""
+    return TestClient(app)
+
+@pytest.fixture(scope="session")
+def docker_compose_file(pytestconfig):
+    """Get the Docker compose file path."""
+    return os.path.join(str(pytestconfig.rootdir), "docker-compose.test.yml")
+
+@pytest.fixture(scope="session")
+def docker_compose_project_name():
+    """Get the Docker compose project name."""
+    return "mcp-chat-test"
+
+@pytest_asyncio.fixture
+async def app(redis_client: RedisClient, manager: WebSocketManager) -> FastAPI:
+    """Create a test FastAPI application."""
+    app = FastAPI(title=settings.PROJECT_NAME)
     
-    # Set Redis client in app state
-    app.state.redis = redis_client
-    
-    # Set up error handlers using the standard method
+    # Add error handlers
     setup_error_handlers(app)
     
-    # Add test routes
-    app.include_router(test_router, prefix="/api/v1")
+    # Add routes
+    app.include_router(router, prefix=settings.API_V1_STR)
+    app.include_router(test_router)
     
-    # Add WebSocket router
-    from app.api.v1.websocket import router as websocket_router
-    app.include_router(websocket_router)  # No prefix needed since it's in the router
+    # Configure test settings
+    app.state.settings = test_settings
+    app.state.redis_client = redis_client
+    app.state.websocket_manager = manager
     
-    # Add health check router
-    from app.api.v1.health import router as health_router
-    app.include_router(health_router, prefix="/api/v1")
+    # Reduce timeouts for testing
+    settings.WEBSOCKET_PING_INTERVAL = 1
+    settings.WEBSOCKET_PING_TIMEOUT = 2
+    settings.MAX_CONNECTIONS_PER_USER = 5
     
-    # Debug: print all registered routes
-    print("\nRegistered routes in test app:")
-    for route in app.routes:
-        print(f"ROUTE: {route.path} [methods: {getattr(route, 'methods', None)}]")
-
-    # Add monitoring test routes
-    @app.post("/api/v1/test/record_model_call")
-    async def test_record_model_call(
-        user_id: str,
-        tokens: int,
-        model: str = "test-model"
-    ):
-        telemetry = TelemetryService(redis_client)
-        await telemetry.record_model_call(
-            user_id=user_id,
-            model=model,
-            tokens=tokens
-        )
-        return {"status": "success"}
-
-    @app.post("/api/v1/test/record_cache_hit")
-    async def test_record_cache_hit(
-        user_id: str
-    ):
-        telemetry = TelemetryService(redis_client)
-        await telemetry.record_cache_hit(user_id)
-        return {"status": "success"}
-
+    # Override the global manager with our test instance
+    import app.core.websocket
+    app.core.websocket.manager = manager
+    
     return app
 
 @pytest_asyncio.fixture
@@ -359,13 +427,14 @@ class MockRedis:
             
         if key in self._data:
             value = self._data[key]
+            # Return the value as bytes, as Redis would
             if isinstance(value, str):
                 return value.encode()
             elif isinstance(value, bytes):
                 return value
-            elif isinstance(value, int):
-                return str(value).encode()
-            return value
+            else:
+                # For non-string/bytes values, JSON encode them
+                return json.dumps(value).encode()
         return None
 
     async def set(
@@ -375,10 +444,18 @@ class MockRedis:
         ex: Optional[int] = None
     ) -> bool:
         """Set a value in Redis."""
-        if isinstance(value, (str, bytes)):
-            self._data[key] = value
+        # Store the value as is, without any conversion
+        # Redis would handle the conversion to bytes
+        if isinstance(value, bytes):
+            # If it's bytes, try to decode it as JSON first
+            try:
+                self._data[key] = json.loads(value.decode())
+            except json.JSONDecodeError:
+                # If it's not JSON, store it as bytes
+                self._data[key] = value
         else:
-            self._data[key] = str(value)
+            # For non-bytes values, store them as is
+            self._data[key] = value
         
         if ex is not None:
             self._expires[key] = ex
@@ -532,75 +609,34 @@ async def redis_client() -> AsyncGenerator[RedisClient, None]:
     yield client
     # No cleanup needed for mock client
 
-@pytest_asyncio.fixture
-async def db() -> AsyncGenerator[AsyncSession, None]:
-    """Create a fresh database for each test."""
-    engine = create_async_engine(
-        TEST_SQLALCHEMY_DATABASE_URL,
-        echo=True,
-        future=True
-    )
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    
-    async_session = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
-    
-    async with async_session() as session:
-        yield session
-        await session.rollback()
-        await session.close()
-    
-    await engine.dispose()
-
-@pytest.fixture(autouse=True)
-def clear_websocket_state():
-    """Clear WebSocket manager state before and after each test."""
-    from app.core.websocket import manager
-    manager.active_connections.clear()
-    manager.connection_metadata.clear()
-    manager.user_connections.clear()
-    manager.message_history.clear()
-    manager.message_by_id.clear()
-    yield
-
-    # After the test, clear the WebSocket state
-    manager.active_connections.clear()
-    manager.connection_metadata.clear()
-    manager.user_connections.clear()
-    manager.message_history.clear()
-    manager.message_by_id.clear()
+@pytest.fixture
+async def mock_db():
+    """Mock database session for testing."""
+    db = AsyncMock()
+    db.execute = AsyncMock()
+    db.close = AsyncMock()
+    return db
 
 @pytest.fixture
-def test_client(app: FastAPI) -> TestClient:
-    """Create a test client that supports WebSocket connections."""
-    return TestClient(app)
+async def mock_redis():
+    """Mock Redis client for testing."""
+    redis = AsyncMock()
+    redis.ping = AsyncMock()
+    redis.close = AsyncMock()
+    return redis
 
-# Add the backend directory to the Python path
-backend_dir = Path(__file__).parent.parent
-if str(backend_dir) not in sys.path:
-    sys.path.insert(0, str(backend_dir))
+@pytest.fixture
+def app(mock_db, mock_redis):
+    """Create test FastAPI application."""
+    from app.main import app
+    app.dependency_overrides = {
+        "app.db.base.get_db": lambda: mock_db,
+        "app.core.redis.get_redis": lambda: mock_redis
+    }
+    return app
 
-# Add the project root to the Python path if needed
-project_root = backend_dir.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-# This ensures both local and Docker environments can find the modules
-os.environ["PYTHONPATH"] = f"{backend_dir}:{project_root}"
-
-@pytest.fixture(scope="session")
-def docker_compose_file(pytestconfig):
-    """Get the Docker compose file path."""
-    return os.path.join(str(pytestconfig.rootdir), "docker-compose.test.yml")
-
-@pytest.fixture(scope="session")
-def docker_compose_project_name():
-    """Get the Docker compose project name."""
-    return "mcp-chat-test"
-
-print("CWD:", os.getcwd())
-print("sys.path:", sys.path) 
+@pytest.fixture
+async def client(app):
+    """Create test client."""
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        yield client 
