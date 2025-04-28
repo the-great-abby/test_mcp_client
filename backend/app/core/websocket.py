@@ -11,7 +11,12 @@ from pytz import UTC
 from app.core.connection_metadata import ConnectionMetadata
 from app.core.connection_state import ConnectionState
 from app.core.chat_message import ChatMessage
+from app.core.websocket_rate_limiter import WebSocketRateLimiter
 import websockets
+from app.utils import get_client_ip
+import asyncio
+from app.core.redis import RedisClient
+from starlette.websockets import WebSocketDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +25,12 @@ PING_TIMEOUT = 60  # seconds
 MAX_CONNECTIONS_PER_USER = 5
 MAX_MESSAGE_HISTORY = 100
 RATE_LIMIT = 10  # messages per second
+RATE_LIMIT_WINDOW = 60  # seconds
 
 class WebSocketManager:
     """Manages active WebSocket connections and message history."""
     
-    def __init__(self):
+    def __init__(self, redis_client: Optional[RedisClient] = None):
         # Maps client_id to WebSocket connection
         self.active_connections: Dict[str, WebSocket] = {}
         # Maps client_id to connection metadata
@@ -35,14 +41,27 @@ class WebSocketManager:
         self.message_history: deque[ChatMessage] = deque(maxlen=MAX_MESSAGE_HISTORY)
         # Maps message_id to ChatMessage for tracking
         self.message_by_id: Dict[str, ChatMessage] = {}
-        # Rate limiting - maps client_id to last message timestamps
-        self.message_timestamps: Dict[str, deque[datetime]] = defaultdict(lambda: deque(maxlen=RATE_LIMIT))
         
         # Configuration properties
         self.ping_timeout = PING_TIMEOUT
         self.max_connections_per_user = MAX_CONNECTIONS_PER_USER
         self.max_message_history = MAX_MESSAGE_HISTORY
         self.rate_limit = RATE_LIMIT
+        self.rate_limit_window = RATE_LIMIT_WINDOW
+        
+        # Redis client for distributed deployments
+        self.redis_client = redis_client
+        
+        # Rate limiter instance with configuration
+        self.rate_limiter = WebSocketRateLimiter(
+            redis=redis_client,
+            max_connections_per_user=MAX_CONNECTIONS_PER_USER,
+            max_connections_per_ip=20,  # Default from rate limiter
+            connection_window_seconds=RATE_LIMIT_WINDOW,
+            max_connections_per_window=50,  # Default from rate limiter
+            message_window_seconds=1,  # 1 second window for message rate limiting
+            max_messages_per_window=RATE_LIMIT
+        )
     
     async def connect(self, client_id: str, websocket: WebSocket, user_id: Optional[str] = None) -> bool:
         """
@@ -63,6 +82,7 @@ class WebSocketManager:
                 return False
             
             # Store connection info
+            ip_address = get_client_ip(websocket)
             self.active_connections[client_id] = websocket
             self.connection_metadata[client_id] = ConnectionMetadata(
                 client_id=client_id,
@@ -70,7 +90,8 @@ class WebSocketManager:
                 connected_at=datetime.now(UTC),
                 last_seen=datetime.now(UTC),
                 state=ConnectionState.CONNECTED,
-                is_typing=False
+                is_typing=False,
+                ip_address=ip_address
             )
             
             if user_id:
@@ -81,8 +102,11 @@ class WebSocketManager:
             logger.debug("Sending welcome message...")
             welcome_msg = ChatMessage(
                 type="welcome",
-                content="Welcome to the chat!",
-                metadata={"client_id": client_id}
+                content="Connected to chat server",
+                metadata={
+                    "client_id": client_id,
+                    "user_id": user_id
+                }
             )
             logger.debug(f"Welcome message type: {welcome_msg.type}")
             await self.send_message(client_id, welcome_msg)
@@ -172,50 +196,39 @@ class WebSocketManager:
         if client_id in self.active_connections:
             try:
                 # Check rate limit for non-system messages
-                if message.type not in ["welcome", "presence", "error"]:
-                    now = datetime.now(UTC)
-                    timestamps = self.message_timestamps[client_id]
-                    
-                    # Remove old timestamps
-                    while timestamps and (now - timestamps[0]).total_seconds() > 1:
-                        timestamps.popleft()
-                    
-                    # Check if rate limit exceeded
-                    if len(timestamps) >= self.rate_limit:
-                        await self.active_connections[client_id].send_json(
-                            ChatMessage(
+                if message.type not in ["welcome", "presence", "error", "history", "ping", "system"]:
+                    metadata = self.connection_metadata.get(client_id)
+                    logging.debug(f"[RateLimit] Checking message limit for client_id={client_id}, user_id={getattr(metadata, 'user_id', None)}, ip={getattr(metadata, 'ip_address', None)}")
+                    allowed = True
+                    if metadata:
+                        allowed, reason = await self.rate_limiter.check_message_limit(
+                            client_id=client_id,
+                            user_id=metadata.user_id,
+                            ip_address=metadata.ip_address
+                        )
+                        if not allowed:
+                            logging.debug(f"[RateLimit] Rate limit exceeded for client_id={client_id}, user_id={metadata.user_id}, ip={metadata.ip_address}")
+                            error_msg = ChatMessage(
                                 type="error",
                                 content="Rate limit exceeded. Please wait before sending more messages.",
                                 metadata={"error_type": "rate_limit"}
-                            ).to_dict()
-                        )
-                        return False
-                    
-                    timestamps.append(now)
-                
-                # Update last seen
-                if client_id in self.connection_metadata:
-                    self.connection_metadata[client_id].last_seen = datetime.now(UTC)
-                
+                            )
+                            await self.active_connections[client_id].send_json(error_msg.to_dict())
+                            return False
+                        else:
+                            logging.debug(f"[RateLimit] Message allowed for client_id={client_id}, user_id={metadata.user_id}, ip={metadata.ip_address}")
                 # Send the message
                 await self.active_connections[client_id].send_json(message.to_dict())
-                logger.debug(f"Sent message to client {client_id}: {message.type}")
-                
-                # Store message in history if it's a chat message
+                # Update message history for chat messages
                 if message.type == "chat_message":
                     self.message_history.append(message)
-                    if message.metadata.get("message_id"):
-                        self.message_by_id[message.metadata["message_id"]] = message
-                
+                    self.message_by_id[message.message_id] = message
                 return True
+            except websockets.exceptions.ConnectionClosed:
+                logger.warning(f"Connection closed while sending to {client_id}")
+                await self.disconnect(client_id)
             except Exception as e:
-                logger.error(f"Error sending message to client {client_id}: {str(e)}", exc_info=True)
-                # Only disconnect if it's a connection-related error
-                if isinstance(e, (websockets.exceptions.ConnectionClosed, 
-                               websockets.exceptions.ConnectionClosedError,
-                               websockets.exceptions.ConnectionClosedOK)):
-                    await self.disconnect(client_id)
-                return False
+                logger.error(f"Error sending message to {client_id}: {str(e)}", exc_info=True)
         return False
     
     async def broadcast(self, message: ChatMessage, exclude: Optional[Set[str]] = None) -> None:
@@ -229,26 +242,27 @@ class WebSocketManager:
         exclude = exclude or set()
         disconnected = set()
         
-        # Store message in history if it's a chat message
-        if message.type == "chat_message":
+        # Store message in history if it's a chat or chat_message
+        if message.type in ("chat_message", "chat"):
             self.message_history.append(message)
             if message.metadata.get("message_id"):
                 self.message_by_id[message.metadata["message_id"]] = message
         
-        for client_id, websocket in self.active_connections.items():
+        for client_id, websocket in list(self.active_connections.items()):
             if client_id not in exclude:
                 try:
                     # Update last seen
                     if client_id in self.connection_metadata:
                         self.connection_metadata[client_id].last_seen = datetime.now(UTC)
-                    
                     # Send the message
                     await websocket.send_json(message.to_dict())
                     logger.debug(f"Broadcast message to client {client_id}: {message.type}")
-                except Exception as e:
-                    logger.error(f"Error broadcasting to client {client_id}: {str(e)}", exc_info=True)
+                except (WebSocketDisconnect, websockets.exceptions.ConnectionClosed, RuntimeError) as e:
+                    logger.warning(f"Client {client_id} disconnected during broadcast: {e}")
                     disconnected.add(client_id)
-        
+                except Exception as e:
+                    logger.error(f"Why is this closed? - Error broadcasting to client {client_id}: {str(e)}", exc_info=True)
+                    disconnected.add(client_id)
         # Clean up any disconnected websockets
         for client_id in disconnected:
             await self.disconnect(client_id)

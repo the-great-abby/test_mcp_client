@@ -1,0 +1,40 @@
+- **Database Migration Strategy**
+  - ✅ DO: Use direct SQLAlchemy schema creation with `Base.metadata.create_all()`
+  - ✅ DO: Handle schema changes through code updates and database resets in development
+  - ✅ DO: Use SQLAlchemy's built-in DDL commands for any necessary schema modifications
+  - ❌ DON'T: Use Alembic or any other migration tool
+  - ❌ DON'T: Add migration-specific files or directories
+
+- **Schema Management**
+  - All schema changes should be made in SQLAlchemy model definitions
+  - Development environments should recreate database from scratch
+  - Production schema changes require manual review and execution
+  - Use SQLAlchemy events for any data migrations needed
+
+- **File Structure**
+  - Keep all database models in `app/models/`
+  - Define base classes in `app/db/base.py`
+  - No migration directories or version tracking files
+  - No `alembic.ini` or similar configuration files
+
+- **Development Workflow**
+  - Update model definitions in SQLAlchemy
+  - Test changes locally with database recreation
+  - Document schema changes in code comments
+  - Use docker-compose down/up to reset development database
+
+- **Deployment Notes**
+  - Production database changes require manual DBA review
+  - Document all schema changes in pull requests
+  - Include rollback procedures in deployment plans
+  - Test schema changes in staging environment first
+
+- **Dependencies**
+  - ❌ DO NOT add these to requirements:
+    - alembic
+    - Flask-Migrate
+    - django-migrations
+  - ✅ Use these for schema management:
+    - SQLAlchemy
+    - asyncpg
+    - psycopg2-binary (for scripts) 

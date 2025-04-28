@@ -1,0 +1,160 @@
+# Command Line Workflow
+
+## Core Principles
+- ✅ Always stay in project root directory
+- ✅ Use Makefile.ai targets for ALL operations
+- ✅ Never cd into subdirectories
+- ✅ Use test-specific containers for test operations
+- ❌ Don't run commands directly in subdirectories
+- ❌ Don't use docker compose commands directly
+- ❌ Don't execute database commands directly against containers
+
+## Database Operations
+
+### Command Execution Rules
+- ✅ Always use Makefile targets for database operations
+- ✅ Use environment-specific database containers
+- ✅ Let the Makefile handle environment variables
+- ❌ Don't connect to database containers directly
+- ❌ Don't run raw SQL commands without Makefile targets
+- ❌ Don't mix dev and test database operations
+
+### Development Database
+```bash
+# Initialize database
+make -f Makefile.ai db-init
+
+# Run migrations
+make -f Makefile.ai migrate
+
+# Create new migration
+make -f Makefile.ai migrate-create name="description"
+
+# Rollback migration
+make -f Makefile.ai migrate-rollback
+
+# List tables
+make -f Makefile.ai list-tables
+```
+
+### Test Database
+```bash
+# Set up test database
+make -f Makefile.ai test-setup
+
+# Clean test database
+make -f Makefile.ai test-clean
+
+# Validate database
+make -f Makefile.ai ai-validate
+```
+
+## Testing Operations
+```bash
+# Full test suite
+make -f Makefile.ai ai-test-all
+
+# Individual test types
+make -f Makefile.ai ai-test-websocket   # WebSocket tests
+make -f Makefile.ai ai-test-unit        # Unit tests
+make -f Makefile.ai ai-test-integration # Integration tests
+
+# Test environment setup
+make -f Makefile.ai test-setup    # Set up test environment
+make -f Makefile.ai test-clean    # Clean test environment
+make -f Makefile.ai ai-validate   # Validate environment
+```
+
+## Environment Management
+```bash
+# Start services
+make -f Makefile.ai ai-up
+
+# Stop services
+make -f Makefile.ai ai-down
+
+# Check status
+make -f Makefile.ai ai-status
+
+# View logs
+make -f Makefile.ai ai-logs
+```
+
+## Best Practices
+- ✅ Always use test-specific containers (ports 8001, 5433, 6380)
+- ✅ Use Makefile.ai for ALL commands
+- ✅ Clean test environment between major test runs
+- ✅ Validate environment before running tests
+- ❌ Don't mix dev and test environments
+- ❌ Don't use direct pytest commands
+- ❌ Don't cd into subdirectories
+- ❌ Don't execute raw SQL commands
+
+## Common Issues
+1. **Database Connection Issues**
+   - Ensure correct container is running (db-test for tests, postgres for dev)
+   - Check correct port is available (5433 for test, 5432 for dev)
+   - Verify you're in project root directory
+   - Use ai-validate to check database health
+
+2. **Test Failures**
+   - Run test-clean before retrying
+   - Check all test containers are running
+   - Verify using correct Makefile targets
+   - Ensure test database is properly initialized
+
+## Quick Reference
+```bash
+# Development Environment
+make -f Makefile.ai ai-up
+make -f Makefile.ai migrate
+make -f Makefile.ai ai-validate
+
+# Test Environment
+make -f Makefile.ai test-setup
+make -f Makefile.ai ai-test-all
+make -f Makefile.ai test-clean
+```
+
+## Directory Structure
+```
+project_root/
+├── Makefile.ai           # Use this for all commands
+├── docker-compose.test.yml
+├── docker-compose.dev.yml
+├── backend/
+│   └── ...
+└── ...
+```
+
+## Environment-Specific Ports
+- Development:
+  - Backend: 8000
+  - Database: 5432
+  - Redis: 6379
+
+- Test:
+  - Backend: 8001
+  - Database: 5433
+  - Redis: 6380
+
+### Command Translation
+Instead of:
+```bash
+cd backend && python migrate.py migrate
+```
+
+Use:
+```bash
+make -f Makefile.ai migrate
+```
+
+Instead of:
+```bash
+docker compose -f docker-compose.test.yml up -d db-test
+```
+
+Use:
+```bash
+make -f Makefile.ai db-test-up
+``` 

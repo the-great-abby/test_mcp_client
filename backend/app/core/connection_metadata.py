@@ -12,7 +12,8 @@ class ConnectionMetadata:
         state: ConnectionState = ConnectionState.CONNECTED,
         connected_at: Optional[datetime] = None,
         last_seen: Optional[datetime] = None,
-        is_typing: bool = False
+        is_typing: bool = False,
+        ip_address: Optional[str] = None
     ):
         self.client_id = client_id
         self.user_id = user_id
@@ -20,6 +21,7 @@ class ConnectionMetadata:
         self.connected_at = connected_at or datetime.utcnow()
         self.last_seen = last_seen or datetime.utcnow()
         self.is_typing = is_typing
+        self.ip_address = ip_address
 
     def to_dict(self) -> dict:
         """Convert the metadata to a dictionary for serialization."""
@@ -29,7 +31,8 @@ class ConnectionMetadata:
             "state": self.state.value,
             "connected_at": self.connected_at.isoformat(),
             "last_seen": self.last_seen.isoformat(),
-            "is_typing": self.is_typing
+            "is_typing": self.is_typing,
+            "ip_address": self.ip_address
         }
 
     def update_last_seen(self) -> None:

@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
 # Testing Workflow Guidelines
 
 - **Overview**
@@ -65,4 +70,4 @@
 - **References**
   - [meta.mdc](mdc:.cursor/rules/meta.mdc) for rule structure
   - [terminal.mdc](mdc:.cursor/rules/terminal.mdc) for terminal management
-  - Makefile.ai documentation for command details 
+  - Makefile.ai documentation for command details

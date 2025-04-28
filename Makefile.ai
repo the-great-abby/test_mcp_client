@@ -1,7 +1,7 @@
 # AI-friendly Makefile
 # All commands return JSON output and include state management
 
-.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug
 
 # Helper function to format JSON output
 define json_output
@@ -92,36 +92,40 @@ ai-test-integration:
 ai-test-coverage:
 	@echo '{"status": "starting", "action": "test-coverage", "message": "Running tests with coverage..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest \
-		--cov=app \
-		--cov-report=term-missing \
-		--cov-report=html \
-		--cov-fail-under=80 \
-		-v tests/ 2>&1); \
-	exit_code=$$?; \
-	coverage=$$(echo "$$output" | grep "TOTAL" | awk '{print $$4}' || echo "0"); \
-	$(call json_output,"ai-test-coverage","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,\
-		"{\"coverage\":\"$$coverage\",\"output\":\"$${output}\"}")) 2>/dev/null
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest \\
+		--cov=app \\
+		--cov-report=term-missing \\
+		--cov-report=html \\
+		--cov-fail-under=80 \\
+		-v tests/ 2>&1); \\
+	exit_code=$$?; \\
+	coverage=$$(echo "$$output" | grep "TOTAL" | awk '{print $$4}' || echo "0"); \\
+	$(call json_output,"ai-test-coverage","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,\\
+		"{\\"coverage\\":\\"$$coverage\\",\\"output\\":\\"$${output}\\"}")) 2>/dev/null
 
+# Target to run tests and log output to a file (Restored Version)
+ai-test-log:
+	@echo "🚀 Running AI Tests and logging output to test_output.log..." > test_output.log # Overwrite log file initially
+	@echo "🔧 Running pytest with coverage..." >> test_output.log 2>&1
+	@docker compose -f docker-compose.test.yml exec -T backend-test pytest \
+		--cov=app --cov-report=term-missing --cov-fail-under=80 \
+		-W ignore::DeprecationWarning -v tests/ >> test_output.log 2>&1 \
+	|| (echo "❌ Tests failed. Output logged to test_output.log." >> test_output.log && exit 1)
+	@echo "✅ Tests completed. Output logged to test_output.log." >> test_output.log
+	@cat test_output.log # Display the log output
+
+# Original test setup logic (called by ai-test-log and potentially others)
 test-setup:
+	@echo "{ \"status\": \"setting up test database\" }"
 	@echo "# First terminate all connections to all databases"
 	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname NOT IN ('postgres') AND pid <> pg_backend_pid();"
 	@echo "# Drop test database if it exists"
 	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS test_db WITH (FORCE);"
-	@echo "# Drop enum from all databases"
-	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -t -A -c "\
-		SELECT datname FROM pg_database WHERE datname NOT IN ('template0', 'template1', 'postgres');" | \
-		while read db; do \
-			if [ ! -z "$$db" ]; then \
-				echo "Dropping messagerole enum from $$db"; \
-				docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d "$$db" -c "DROP TYPE IF EXISTS messagerole CASCADE;"; \
-				docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d "$$db" -c "SET search_path TO public; DROP TYPE IF EXISTS public.messagerole CASCADE;"; \
-			fi \
-		done
 	@echo "# Create test database"
 	docker compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d postgres -c "CREATE DATABASE test_db TEMPLATE template0;"
-	@echo "# Run migrations"
-	docker compose -f docker-compose.test.yml exec -T backend-test alembic upgrade head
+	@echo "# Initialize test database schema using SQLAlchemy"
+	@echo 'import asyncio\nfrom app.db.session import init_db\n\nasyncio.run(init_db())' | docker compose -f docker-compose.test.yml exec -T backend-test python
+	@echo "{ \"status\": \"test database setup complete\" }"
 
 # Stop containers with JSON output
 ai-stop:
@@ -141,6 +145,20 @@ ai-down:
 	@docker compose -f docker-compose.test.yml down -v
 	@echo '{"status": "complete", "action": "down", "message": "All containers stopped and volumes removed"}'
 
+# Start test environment with JSON output
+ai-up-test:
+	@echo '{"status": "starting", "action": "up-test", "message": "Starting test environment..."}'
+	@docker compose -f docker-compose.test.yml up -d
+	@echo "Waiting for services to be ready..."
+	@sleep 5
+	@(healthy_count=$$(docker-compose -f docker-compose.test.yml ps --services --filter "health=healthy" | wc -l | tr -d ' '); \
+	total_count=$$(docker-compose -f docker-compose.test.yml ps --services | wc -l | tr -d ' '); \
+	if [ $$healthy_count -eq $$total_count ]; then \
+		$(call json_output,"ai-up-test","success",0,"{\"healthy_containers\":$$healthy_count,\"total_containers\":$$total_count,\"message\":\"Test environment ready\"}"); \
+	else \
+		$(call json_output,"ai-up-test","warning",1,"{\"healthy_containers\":$$healthy_count,\"total_containers\":$$total_count,\"message\":\"Some containers not healthy\"}"); \
+	fi) 2>/dev/null
+
 # Default help command
 help:
 	@echo "Available AI-friendly commands:"
@@ -158,4 +176,24 @@ help:
 	@echo "  make -f Makefile.ai ai-stop       - Stop containers"
 	@echo "  make -f Makefile.ai ai-clean      - Clean project"
 	@echo "  make -f Makefile.ai ai-down       - Stop and remove containers with volumes"
-	@echo "  make -f Makefile.ai ai-test-coverage - Run tests with coverage reporting" 
+	@echo "  make -f Makefile.ai ai-test-coverage - Run tests with coverage reporting"
+	@echo "  make -f Makefile.ai ai-up-test    - Start test environment containers"
+	@echo "  make -f Makefile.ai ai-test-log    - Run tests and log output" 
+
+# Stop test containers with JSON output
+ai-test-stop:
+	@echo "{ \"status\": \"stopping test containers\" }"
+	@docker compose -f docker-compose.test.yml down --remove-orphans
+	@echo "{ \"status\": \"test containers stopped\" }"
+
+ai-test-debug:
+	@echo "Running tests in debug mode with detailed output..."
+	docker compose -f docker-compose.test.yml exec backend-test pytest \
+		--verbose \
+		--capture=no \
+		--log-cli-level=DEBUG \
+		--log-cli-format="%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)" \
+		--showlocals \
+		--tb=long \
+		-vv \
+		tests/test_websocket.py tests/test_websocket_rate_limit.py

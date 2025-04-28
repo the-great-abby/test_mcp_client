@@ -8,7 +8,6 @@ setup(
         "fastapi>=0.100.0",
         "uvicorn>=0.23.1",
         "sqlalchemy>=2.0.27",
-        "alembic>=1.13.1",
         "psycopg2-binary>=2.9.9",
         "redis>=5.0.1",
         "pydantic>=2.7.2,<3.0.0",

@@ -97,6 +97,14 @@ class RedisClient:
         """Delete one or more keys."""
         return await self.redis.delete(*names)
 
+    async def close(self):
+        """Close the Redis connection."""
+        await self.redis.close()
+
+    async def expire(self, key, seconds):
+        if self._pipeline:
+            await self._pipeline.expire(key, seconds)
+
 _redis_client: Optional[RedisClient] = None
 
 async def get_redis_client() -> RedisClient:

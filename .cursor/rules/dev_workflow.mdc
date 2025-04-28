@@ -1,38 +1,68 @@
----
-description: Guide for using meta-development script (scripts/dev.js) to manage task-driven development workflows
-globs: **/*
-alwaysApply: true
----
-
 - **Global CLI Commands**
-  - Task Master now provides a global CLI through the `task-master` command
-  - All functionality from `scripts/dev.js` is available through this interface
-  - Install globally with `npm install -g claude-task-master` or use locally via `npx`
-  - Use `task-master <command>` instead of `node scripts/dev.js <command>`
-  - Examples:
-    - `task-master list` instead of `node scripts/dev.js list`
-    - `task-master next` instead of `node scripts/dev.js next`
-    - `task-master expand --id=3` instead of `node scripts/dev.js expand --id=3`
-  - All commands accept the same options as their script equivalents
-  - The CLI provides additional commands like `task-master init` for project setup
+  - Task Master provides global CLI through `task-master` command
+  - Install globally: `npm install -g claude-task-master`
+  - Use locally: `npx task-master <command>`
+  ```bash
+  # ✅ DO: Use task-master CLI
+  task-master list
+  task-master next
+  task-master expand --id=3
+  
+  # ❌ DON'T: Use legacy script directly
+  node scripts/dev.js list
+  node scripts/dev.js next
+  ```
 
 - **Development Workflow Process**
-  - Start new projects by running `task-master init` or `node scripts/dev.js parse-prd --input=<prd-file.txt>` to generate initial tasks.json
-  - Begin coding sessions with `task-master list` to see current tasks, status, and IDs
-  - Analyze task complexity with `task-master analyze-complexity --research` before breaking down tasks
-  - Select tasks based on dependencies (all marked 'done'), priority level, and ID order
-  - Clarify tasks by checking task files in tasks/ directory or asking for user input
-  - View specific task details using `task-master show <id>` to understand implementation requirements
-  - Break down complex tasks using `task-master expand --id=<id>` with appropriate flags
-  - Clear existing subtasks if needed using `task-master clear-subtasks --id=<id>` before regenerating
-  - Implement code following task details, dependencies, and project standards
-  - Verify tasks according to test strategies before marking as complete
-  - Mark completed tasks with `task-master set-status --id=<id> --status=done`
-  - Update dependent tasks when implementation differs from original plan
-  - Generate task files with `task-master generate` after updating tasks.json
-  - Maintain valid dependency structure with `task-master fix-dependencies` when needed
-  - Respect dependency chains and task priorities when selecting work
-  - Report progress regularly using the list command
+  - Initialize project:
+    ```bash
+    task-master init
+    # or
+    task-master parse-prd --input=<prd-file.txt>
+    ```
+  - View tasks: `task-master list`
+  - Analyze complexity: `task-master analyze-complexity --research`
+  - Select tasks based on:
+    - Dependencies (all marked 'done')
+    - Priority level
+    - ID order
+  - Break down tasks: `task-master expand --id=<id>`
+  - Mark completion: `task-master set-status --id=<id> --status=done`
+
+- **Task Structure**
+  ```json
+  {
+    "id": "1",
+    "title": "Initialize Repo",
+    "description": "Create repository and initial structure",
+    "status": "pending",
+    "dependencies": [1, 2],
+    "priority": "high",
+    "details": "Detailed implementation steps...",
+    "testStrategy": "Verification approach..."
+  }
+  ```
+
+- **Environment Configuration**
+  ```bash
+  # Required
+  ANTHROPIC_API_KEY=sk-ant-api03-...
+  
+  # Optional with defaults
+  MODEL=claude-3-sonnet-20240229
+  MAX_TOKENS=4000
+  TEMPERATURE=0.7
+  DEBUG=false
+  LOG_LEVEL=info
+  ```
+
+- **Common Commands Reference**
+  - List tasks: `task-master list [--status=<status>]`
+  - Show task: `task-master show <id>`
+  - Add dependency: `task-master add-dependency --id=<id> --depends-on=<id>`
+  - Remove dependency: `task-master remove-dependency --id=<id> --depends-on=<id>`
+  - Validate structure: `task-master validate-dependencies`
+  - Fix issues: `task-master fix-dependencies`
 
 - **Task Complexity Analysis**
   - Run `node scripts/dev.js analyze-complexity --research` for comprehensive analysis
@@ -327,6 +357,11 @@ alwaysApply: true
       - Add `--include="*.ts"` to filter by file extension
       - Use with `| sort` to alphabetize results
     - Integration with refactoring workflow:
+      - Start by mapping all functions in the source file
+      - Create target module files based on function grouping
+      - Verify all functions were properly migrated
+      - Check for any unintentional duplications or omissions
+
       - Start by mapping all functions in the source file
       - Create target module files based on function grouping
       - Verify all functions were properly migrated

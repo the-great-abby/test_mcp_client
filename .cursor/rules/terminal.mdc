@@ -3,4 +3,63 @@ description:
 globs: 
 alwaysApply: false
 ---
- 
+# Terminal Operations and Troubleshooting
+
+- **Overview**
+  - Guidelines for maintaining stable terminal operations
+  - Troubleshooting common terminal issues
+  - Best practices for command execution
+  - Terminal state management
+
+- **Terminal Health Indicators**
+  - **Warning Signs**
+    - Capital letters appearing at end of command sequences
+    - Unusual formatting in command output
+    - Delayed or missing command prompts
+    - Corrupted command history
+
+  - **Preventive Measures**
+    - Use clean terminal instances for new tasks
+    - Monitor command output formatting
+    - Regular Cursor restarts during long sessions
+    - Clear terminal state when switching contexts
+
+- **Troubleshooting Steps**
+  - **When Capital Letters Appear**
+    1. Complete current command if possible
+    2. Request Cursor restart
+    3. Verify terminal state after restart
+    4. Re-run last command sequence if needed
+
+  - **For Command Sequence Issues**
+    1. Note the last successful command
+    2. Request Cursor restart
+    3. Navigate back to working directory
+    4. Resume command sequence
+
+- **Best Practices**
+  - ✅ DO: Monitor terminal output formatting
+  - ✅ DO: Request restart at first sign of corruption
+  - ✅ DO: Use fresh terminals for new tasks
+  - ✅ DO: Keep track of working directory
+  - ❌ DON'T: Ignore formatting anomalies
+  - ❌ DON'T: Continue with corrupted terminal
+  - ❌ DON'T: Stack multiple command sequences
+  - ❌ DON'T: Skip verification after restart
+
+- **Examples**
+  ```bash
+  # Good: Clean command sequence
+  $ cd project
+  $ npm install
+  $ npm test
+  
+  # Bad: Corrupted terminal (notice capital 'A' at end)
+  $ cd projectA
+  $ npm installA
+  $ npm testA
+  ```
+
+- **References**
+  - [meta.mdc](mdc:.cursor/rules/meta.mdc) for general rule guidelines
+  - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc) for testing workflows 

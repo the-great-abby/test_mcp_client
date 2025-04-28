@@ -1,0 +1,46 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# WebSocket Rate Limit Test Rule
+
+- **Overview**
+  - This rule governs the structure and assertions for WebSocket rate limiting tests, especially `test_rate_limit_by_ip`.
+  - The goal is to ensure the server enforces a maximum number of concurrent WebSocket connections per IP (or user), preventing abuse and resource exhaustion.
+
+- **Why Test the Third Connection?**
+  - The third connection is used to verify that the rate limiter is working as intended.
+  - If your limit is 2 connections per IP, the third should be rejected. If the limit is higher, adjust the test accordingly.
+  - This check is critical for:
+    - Preventing denial-of-service (DoS) via excessive connections
+    - Ensuring fair resource allocation
+    - Enforcing business/security policies
+
+- **Correct Assertion Pattern**
+  - The test **must fail** if the third connection is accepted when it should be rejected.
+  - Do **not** catch `AssertionError` or all exceptions; only catch expected connection errors.
+  - Example:
+
+  ```python
+  import websockets
+  try:
+      async with websockets.connect(uri) as ws3:
+          debug("ws3 unexpectedly connected")
+          assert False, "Third connection should have been rejected by rate limiter"
+  except (websockets.exceptions.InvalidStatusCode, OSError) as exc:
+      debug(f"ws3 connection exception: {exc}")
+  ```
+
+- **Anti-patterns**
+  - Do **not** catch all exceptions (e.g., `except Exception as exc:`) and suppress assertion failures. This will cause the test to always pass, even if the rate limiter is broken.
+
+- **Actionable Requirements**
+  - Always assert that the third (or N+1) connection is rejected if the rate limit is N.
+  - Only catch exceptions that indicate a connection was refused.
+  - Update the test and this rule if the rate limit changes.
+
+- **References**
+  - See [backend/tests/async/test_websocket_rate_limit.py](mdc:backend/tests/async/test_websocket_rate_limit.py) for implementation.
+  - Cross-reference with [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc) for rule structure.
+

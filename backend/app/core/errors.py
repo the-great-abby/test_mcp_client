@@ -22,6 +22,16 @@ class AppError(Exception):
         self.status_code = status_code
         super().__init__(message)
 
+class RateLimitExceeded(AppError):
+    """Error raised when rate limit is exceeded."""
+    def __init__(self, message: str = "Rate limit exceeded", code: str = "rate_limit_exceeded"):
+        super().__init__(message=message, code=code, status_code=429)
+
+class ConnectionLimitExceeded(AppError):
+    """Error raised when connection limit is exceeded."""
+    def __init__(self, message: str = "Connection limit exceeded", code: str = "connection_limit_exceeded"):
+        super().__init__(message=message, code=code, status_code=429)
+
 class NotFoundError(AppError):
     """Error raised when a resource is not found."""
     def __init__(self, message: str = "Resource not found", code: str = "resource_not_found"):

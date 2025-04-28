@@ -5,17 +5,17 @@ import asyncio
 from redis.asyncio import Redis
 from app.core.cache import ModelResponseCache
 from app.core.config import settings
-from tests.conftest import MockRedis
+from tests.helpers import MockRedis
 
 @pytest.fixture
-async def redis_client():
+async def async_redis_client():
     """Create a Redis client for testing."""
     return MockRedis()
 
 @pytest.fixture
-def model_cache(redis_client):
+async def model_cache(async_redis_client):
     """Create a ModelResponseCache instance for testing."""
-    return ModelResponseCache(redis_client)
+    return ModelResponseCache(async_redis_client)
 
 @pytest.mark.asyncio
 async def test_generate_cache_key(model_cache):

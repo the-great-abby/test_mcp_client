@@ -1,41 +1,41 @@
-from fastapi import FastAPI, Depends, Request, Response, WebSocket
+"""
+Main FastAPI application.
+"""
+from fastapi import FastAPI, Request, Response, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
-from redis import Redis
-from mcp.server.fastmcp import FastMCP, Context
-import logging
-import time
+from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-import os
-from typing import Literal
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import logging
 import json
-from pydantic import ValidationError as PydanticValidationError
+from datetime import datetime
+from typing import Dict, Any, Optional, Literal
+import asyncio
+import time
 
+from app.api.router import router as api_router
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.errors import (
     AppError,
     NotFoundError,
     ValidationError,
-    register_error_handlers,
-    setup_error_handlers,
-    app_error_handler,
-    validation_error_handler,
     pydantic_validation_error_handler,
-    generic_error_handler
+    validation_error_handler,
+    app_error_handler,
+    generic_error_handler,
 )
-from app.db.session import get_async_session as get_db
-from app.core.redis import get_redis
-from app.api.v1 import users, conversations, messages, auth, websocket, health
-
-# Valid log levels
-LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+from pydantic import ValidationError as PydanticValidationError
+from app.core.websocket import WebSocketManager
+from app.core.redis import RedisClient
+from app.api.v1 import auth, users, conversations, messages, websocket, health
 
 # Set up logging
 setup_logging()
 logger = logging.getLogger(__name__)
+
+# Valid log levels
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
 # Define valid log levels and ensure proper format
 VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
@@ -86,10 +86,6 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AppError, app_error_handler)
     app.add_exception_handler(Exception, generic_error_handler)
 
-    # Create MCP server with environment variable
-    os.environ["FASTMCP_LOG_LEVEL"] = "INFO"
-    mcp = FastMCP("MCP Chat")
-
     # Add request logging middleware
     @app.middleware("http")
     async def log_requests(request: Request, call_next) -> Response:
@@ -116,15 +112,16 @@ def create_app() -> FastAPI:
         return response
 
     # Include API routers
-    app.include_router(auth.router, prefix="/api/v1")
-    app.include_router(users.router, prefix="/api/v1")
-    app.include_router(conversations.router, prefix="/api/v1")
-    app.include_router(messages.router, prefix="/api/v1")
-    app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
-    app.include_router(health.router, prefix=settings.API_V1_STR, tags=["health"])
+    app.include_router(api_router)
 
-    # Mount the MCP SSE app at a specific path instead of root
-    app.mount("/mcp", mcp.sse_app())
+    # Initialize WebSocket manager with Redis client
+    redis_client = RedisClient(settings.REDIS_URI)
+    manager = WebSocketManager(redis_client=redis_client)
+
+    # Store dependencies in app state
+    app.state.settings = settings
+    app.state.redis_client = redis_client
+    app.state.websocket_manager = manager
 
     return app
 
@@ -136,7 +133,22 @@ async def health_check(websocket: WebSocket):
     await websocket.accept()
     await websocket.close()
 
-@app.get("/health")
+@app.get("/api/v1/health")
 async def rest_health_check(request: Request):
-    logger.info(f"/health called from {request.client.host} with headers: {dict(request.headers)}")
-    return {"status": "ok"} 
+    """Health check endpoint."""
+    logger.debug(f"Health check called from {request.client.host}")
+    logger.debug(f"Request headers: {dict(request.headers)}")
+    logger.debug("Database connection check...")
+    try:
+        # Return basic health status
+        return {
+            "status": "ok",
+            "timestamp": datetime.utcnow().isoformat(),
+            "environment": settings.NODE_ENV
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "detail": str(e)}
+        ) 

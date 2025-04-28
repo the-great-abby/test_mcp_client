@@ -1,3 +1,8 @@
+---
+description: environment explanations
+globs: 
+alwaysApply: false
+---
 - **Environment Types**
   - **Development**
     ```yaml

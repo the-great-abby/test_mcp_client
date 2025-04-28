@@ -1,0 +1,49 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# WebSocket Message Sequence Test Rule
+
+- **Overview**
+  - This rule documents the expected message sequence in WebSocket tests, especially for chat or real-time APIs.
+  - Many WebSocket servers send a 'welcome' or handshake message immediately after connection, before any user or chat messages.
+  - Tests must be robust to this sequence and not assume the first message is always the one being asserted.
+
+- **Expected Sequence**
+  - On connection, the server typically sends:
+    1. A 'welcome' message (type: 'welcome')
+    2. (Optional) history, presence, or system messages
+    3. The actual chat/user message (type: 'chat_message', 'message', etc.)
+
+- **Actionable Requirements**
+  - Tests must consume and ignore any initial 'welcome' or non-target messages before asserting on the expected message type.
+  - Use a loop to receive messages until the desired type is found, or explicitly check and skip known system messages.
+  - Do not assume the first message is always the one you want to assert on.
+
+- **Correct Example**
+  ```python
+  # Wait for the first chat_message, skipping welcome/history
+  while True:
+      resp = json.loads(await ws.recv())
+      if resp["type"] == "chat_message":
+          break
+  assert resp["type"] == "chat_message"
+  ```
+
+- **Anti-patterns**
+  - Do **not** write tests that immediately assert on the first message received:
+  ```python
+  # ❌ This will fail if the first message is 'welcome'
+  resp = json.loads(await ws.recv())
+  assert resp["type"] == "chat_message"
+  ```
+
+- **Common Pitfalls**
+  - Failing tests due to unexpected 'welcome' or system messages
+  - Flaky tests that pass/fail depending on server timing or message order
+
+- **References**
+  - See [backend/tests/async/test_websocket_rate_limit.py](mdc:backend/tests/async/test_websocket_rate_limit.py) for implementation.
+  - Cross-reference with [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc) for rule structure.
+

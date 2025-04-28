@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
     NODE_ENV: str = "development"
+    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
     
     @validator("LOG_LEVEL", pre=True)
     def uppercase_log_level(cls, v: str) -> str:
@@ -18,10 +19,17 @@ class Settings(BaseSettings):
     
     # PostgreSQL
     POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "postgres")
-    POSTGRES_PORT: str = os.getenv("POSTGRES_PORT", "5432")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "test_mcp_chat")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres")
+    
+    @validator("POSTGRES_PORT", pre=True)
+    def validate_postgres_port(cls, v: Union[str, int]) -> int:
+        """Validate and convert POSTGRES_PORT to integer."""
+        if isinstance(v, str):
+            return int(v)
+        return v
     
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
@@ -74,7 +82,7 @@ class Settings(BaseSettings):
             password=self.POSTGRES_PASSWORD,
             host=self.POSTGRES_HOST,
             port=int(self.POSTGRES_PORT),
-            path="test_mcp_chat"  # Removed leading slash
+            path="test_db"  # Updated to match docker-compose.test.yml
         )
         return str(dsn)
     
@@ -93,8 +101,8 @@ class Settings(BaseSettings):
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
     
     # JWT Settings
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key")  # Change in production!
-    ALGORITHM: str = "HS256"
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key")  # Change in production!
+    JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Model Settings

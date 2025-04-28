@@ -1,0 +1,157 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Rule Creation Guidelines
+
+- **Rule Creation Workflow**
+  - **Required Steps**
+    1. Create initial rule as `.txt` file in workspace root
+    2. Review and validate content structure
+    3. Rename to `.mdc` extension
+    4. Move to `.cursor/rules/` directory
+    ```bash
+    # ✅ Correct workflow
+    1. Create: my_rule.txt
+    2. Review content
+    3. Rename: my_rule.mdc
+    4. Move: .cursor/rules/my_rule.mdc
+    
+    # ❌ Incorrect workflow
+    - Creating .mdc file directly in .cursor/rules
+    - Skipping .txt stage
+    - Moving without review
+    ```
+
+- **Rule File Structure**
+  - **Required Components**
+    ```markdown
+    ---
+    description: One-line clear purpose statement
+    globs: path/to/files/*.ext
+    alwaysApply: boolean
+    ---
+
+    # Rule Title
+    
+    - **Section Headers**
+      - Content in bullet points
+    ```
+  
+  - **Naming Convention**
+    - Use lowercase with underscores
+    - End with `.mdc` extension
+    - Be descriptive but concise
+    - Examples:
+      ```
+      ✅ api_conventions.mdc
+      ✅ react_components.mdc
+      ❌ API.mdc
+      ❌ rule1.mdc
+      ```
+
+- **Content Guidelines**
+  - **Must Include**
+    - Clear overview section
+    - Specific examples
+    - DO and DON'T patterns
+    - Code snippets when relevant
+    - References to related rules
+  
+  - **Formatting**
+    - Use bullet points for clarity
+    - Include code blocks with language
+    - Keep sections focused
+    - Use consistent indentation
+    ```markdown
+    - **Section**
+      - Subsection
+        ```typescript
+        // Code example
+        ```
+    ```
+
+- **Best Practices**
+  - ✅ DO: Start with a .txt file
+  - ✅ DO: Review before converting to .mdc
+  - ✅ DO: Include real codebase examples
+  - ✅ DO: Cross-reference related rules
+  - ✅ DO: Use consistent formatting
+  - ✅ DO: Keep rules focused and specific
+  - ❌ DON'T: Create .mdc files directly
+  - ❌ DON'T: Skip the .txt review stage
+  - ❌ DON'T: Duplicate information
+  - ❌ DON'T: Use vague language
+  - ❌ DON'T: Skip required sections
+  - ❌ DON'T: Mix different concerns
+
+- **Rule Categories**
+  - **Core Rules**
+    - Fundamental patterns
+    - Project structure
+    - Naming conventions
+  
+  - **Language Rules**
+    - Language-specific patterns
+    - Syntax preferences
+    - Common pitfalls
+  
+  - **Framework Rules**
+    - Framework best practices
+    - Component patterns
+    - State management
+  
+  - **Tool Rules**
+    - Development tools
+    - Testing frameworks
+    - Build processes
+
+- **Maintenance**
+  - **Regular Review**
+    - Monthly review for relevance
+    - Update examples as needed
+    - Remove outdated content
+    - Add new patterns as discovered
+  
+  - **Version Control**
+    - Track changes in git
+    - Use descriptive commit messages
+    - Review changes with team
+    - Keep history clean
+
+- **Examples**
+  ```markdown
+  # ✅ Good Rule Example
+  ---
+  description: Guidelines for React component structure
+  globs: src/components/**/*.tsx
+  alwaysApply: true
+  ---
+  
+  # React Component Structure
+  
+  - **Overview**
+    - Clear purpose
+    - When to use
+  
+  - **Guidelines**
+    - Specific requirements
+    - Code examples
+  
+  # ❌ Bad Rule Example
+  ---
+  description: some stuff about code
+  globs: src/*
+  ---
+  
+  Random guidelines without structure
+  No clear sections
+  Missing examples
+  ```
+
+- **References**
+  - [meta.mdc](mdc:.cursor/rules/meta.mdc) for overall rule organization
+  - [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc) for base requirements
+  - External documentation standards
+

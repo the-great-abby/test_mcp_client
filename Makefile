@@ -1,4 +1,4 @@
-.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup
+.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean
 
 # Development commands
 dev:
@@ -65,26 +65,33 @@ migrate-rollback: alembic-setup
 		backend alembic downgrade -1
 
 # Test commands
-test-setup: alembic-setup
-	docker-compose -f docker-compose.test.yml build
-	docker-compose -f docker-compose.test.yml up -d
+test-setup:
+	@echo "🔧 Setting up test environment..."
+	@docker-compose -f docker-compose.test.yml build
+	@docker-compose -f docker-compose.test.yml up -d
+	@chmod +x scripts/wait-for-services.sh
+	@echo "⏳ Waiting for services to be ready..."
+	@docker-compose -f docker-compose.test.yml exec backend-test /app/scripts/wait-for-services.sh || (echo "❌ Services failed to start" && exit 1)
+	@echo "✅ Test environment ready"
 
 test: test-setup
-	docker-compose -f docker-compose.test.yml exec backend-test pytest -s || (echo "❌ Tests failed" && exit 1)
+	@echo "🧪 Running tests..."
+	@docker-compose -f docker-compose.test.yml exec backend-test pytest -vv $(ARGS) || (echo "❌ Tests failed" && exit 1)
+	@echo "✅ Tests completed successfully"
 
 test-unit: test-setup
 	@echo "🧪 Running unit tests..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -s -m "not integration and not e2e" || (echo "❌ Unit tests failed" && exit 1)
+	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -m "not integration and not e2e" || (echo "❌ Unit tests failed" && exit 1)
 	@echo "✅ Unit tests completed successfully"
 
 test-integration: test-setup
 	@echo "🧪 Running integration tests..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -s -m integration || (echo "❌ Integration tests failed" && exit 1)
+	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -m integration || (echo "❌ Integration tests failed" && exit 1)
 	@echo "✅ Integration tests completed successfully"
 
 test-e2e: test-setup
 	@echo "🧪 Running end-to-end tests..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -s -m e2e || (echo "❌ E2E tests failed" && exit 1)
+	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -m e2e || (echo "❌ E2E tests failed" && exit 1)
 	@echo "✅ E2E tests completed successfully"
 
 test-coverage: test-setup
@@ -99,6 +106,14 @@ test-clean:
 	@rm -rf backend/.coverage
 	@rm -rf backend/test-reports
 	@echo "✨ Test environment cleaned"
+
+test-async: test-setup
+	@echo "🧪 Running async tests..."
+	@docker-compose -f docker-compose.test.yml exec backend-test pytest -vv tests/async || (echo "❌ Async tests failed" && exit 1)
+	@echo "✅ Async tests completed successfully"
+
+test-async-logs:
+	@docker-compose -f docker-compose.test.yml logs -f backend-test | tee test-async.log
 
 # Show help
 help:
@@ -135,4 +150,11 @@ ai-restart:
 check-dev:
 	@./scripts/check-dev-env.sh
 
+pycache-clean:
+	@echo "🧹 Removing all __pycache__ directories and .pyc files..."
+	@find . -type d -name '__pycache__' -exec rm -rf {} +
+	@find . -type f -name '*.pyc' -delete
+	@echo "✅ Python cache cleanup complete."
+
 .DEFAULT_GOAL := dev 
+

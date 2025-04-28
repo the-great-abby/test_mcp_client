@@ -1,164 +1,67 @@
 ---
 description: 
 globs: 
-alwaysApply: undefined
+alwaysApply: false
 ---
-- **Test Environment**
-  - **Docker Configuration**
-    ```yaml
-    # Use docker-compose.test.yml, NOT docker/dev/docker-compose.yml
-    services:
-      backend-test:  # Port 8001:8000
-      db-test:      # Port 5433:5432
-      redis-test:   # Port 6380:6379
-    ```
-  - **Network**
-    - Uses dedicated `test-network`
-    - All services connected via `mcp-chat-test-network`
-    - Isolated from development environment
+# Test Execution Standard: `make test`
 
-- **Test Commands**
+- **Overview**
+  - All tests MUST be run using the `make test` command.
+  - Direct invocation of `pytest` or other test runners is NOT supported.
+  - This ensures tests run in the correct Docker Compose environment with all dependencies and network isolation.
+
+- **Requirements**
+  - Always use `make test` (or other Makefile targets like `make test-unit`, `make test-integration`) to execute tests.
+  - Do NOT run `pytest` directly from the CLI, IDE, or scripts.
+  - Ensure the Makefile and Docker Compose test environment are up to date and used for all test runs.
+
+- **Examples**
   ```bash
-  # Use test-specific commands
-  make -f Makefile.ai ai-test-websocket   # WebSocket tests
-  make -f Makefile.ai ai-test-unit        # Unit tests
-  make -f Makefile.ai ai-test-integration  # Integration tests
+  # ✅ DO: Use Makefile targets
+  make test
+  make test-unit
+  make test-integration
+
+  # ❌ DON'T: Run pytest directly
+  pytest
+  python -m pytest
+  pytest tests/
   ```
 
 - **Best Practices**
-  - ✅ DO: Use test-specific containers and ports
-  - ✅ DO: Use proper cleanup in fixtures
-  - ✅ DO: Add descriptive logging
-  - ❌ DON'T: Mix dev and test environments
-  - ❌ DON'T: Use hardcoded dev ports/hosts
+  - Use Makefile targets for all test execution to ensure consistent environments.
+  - Keep test and development environments isolated.
+  - Reference the [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) rule for details on Docker Compose and Makefile usage.
 
-- **Test Database**
-  - Name: `test_db`
-  - Host: `db-test`
-  - Port: 5433 (external), 5432 (internal)
-  - Fresh instance for each test run
+- **References**
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc)
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc)
+  - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc)
 
-- **Common Patterns**
+- **TestClient Usage Rule**
+  - When using FastAPI's `TestClient` for testing (including WebSocket tests):
+    - All test functions MUST be synchronous (`def`, not `async def`).
+    - Do NOT use `@pytest.mark.asyncio` on these tests.
+    - Use synchronous context managers (e.g., `with client.websocket_connect(...)`).
+    - Do NOT use `await` or `async with` with `TestClient`.
+  - This ensures compatibility with pytest and FastAPI's synchronous test client.
+
+  **Examples:**
   ```python
-  # ✅ DO: Use test environment configuration
-  TEST_SERVER_HOST = os.getenv("TEST_SERVER_HOST", "backend-test")
-  TEST_SERVER_PORT = int(os.getenv("TEST_SERVER_PORT", "8000"))  # Internal port
-  
-  # ✅ DO: Use async fixtures with cleanup
-  @pytest_asyncio.fixture
-  async def test_client():
-      # Setup using test environment
-      base_url = f"ws://{TEST_SERVER_HOST}:{TEST_SERVER_PORT}"
-      yield base_url
-      # Cleanup
-  
-  # ❌ DON'T: Use development environment
-  base_url = "ws://localhost:8000"  # Wrong! Use test environment
+  # ✅ DO: Synchronous test function
+  def test_websocket_connection(client):
+      with client.websocket_connect("/ws") as ws:
+          ws.send_json({"type": "ping"})
+          msg = ws.receive_json()
+          assert msg["type"] == "pong"
+
+  # ❌ DON'T: Async test function with TestClient
+  @pytest.mark.asyncio
+  async def test_websocket_connection(client):
+      async with client.websocket_connect("/ws") as ws:
+          await ws.send_json({"type": "ping"})
+          msg = await ws.receive_json()
+          assert msg["type"] == "pong"
   ```
 
-- **Environment Variables**
-  - `TEST_SERVER_HOST`: backend-test
-  - `TEST_SERVER_PORT`: 8000 (internal)
-  - `POSTGRES_HOST`: db-test
-  - `POSTGRES_PORT`: 5432 (internal)
-  - `REDIS_HOST`: redis-test
-  - `REDIS_PORT`: 6379 (internal)
-
-- **Test Commands and Structure**
-  - **WebSocket Tests:** `make -f Makefile.ai ai-test-websocket`
-    - Located in `tests/test_websocket.py`
-    - Tests WebSocket connections and authentication
-    - Requires Redis and PostgreSQL containers running
-  
-  - **Unit Tests:** `make -f Makefile.ai ai-test-unit`
-    - Located in `tests/unit/`
-    - For testing individual components in isolation
-    - No external dependencies required
-  
-  - **Integration Tests:** `make -f Makefile.ai ai-test-integration`
-    - Located in `tests/integration/`
-    - Tests component interactions
-    - Requires full test environment
-
-- **Test Environment Setup**
-  ```bash
-  # Set up test environment
-  make -f Makefile.ai test-setup
-  
-  # Validate environment
-  make -f Makefile.ai ai-validate
-  ```
-
-- **Test Database**
-  - Name: `test_mcp_chat`
-  - Automatically created by `test-setup`
-  - Fresh instance for each test run
-  - Uses `template0` as base
-
-- **Common Patterns**
-  ```python
-  # ✅ DO: Use async fixtures with cleanup
-  @pytest_asyncio.fixture
-  async def test_client():
-      # Setup
-      yield client
-      # Cleanup
-  
-  # ❌ DON'T: Leave resources uncleaned
-  @pytest.fixture
-  def bad_fixture():
-      return create_resource()  # No cleanup!
-  ```
-
-- **Test Environment Requirements**
-  - ✅ Always use Docker for running tests
-  - ❌ Never run tests directly in local environment
-  
-- **Running Tests with Docker**
-  ```bash
-  # ✅ DO: Use make commands for testing
-  make test              # Run all tests
-  make test-unit         # Run unit tests only
-  make test-integration  # Run integration tests
-  make test-e2e         # Run end-to-end tests
-  make test-coverage    # Run tests with coverage
-  
-  # ❌ DON'T: Run pytest directly
-  python -m pytest ...  # This will fail due to missing dependencies
-  ```
-
-- **Test Setup and Cleanup**
-  - ✅ Use `make test-setup` to prepare test environment
-  - ✅ Use `make test-clean` to clean up after testing
-  - ✅ Let Docker handle dependencies and environment variables
-
-- **Environment Variables**
-  - Docker test environment automatically sets:
-    - `POSTGRES_HOST=db-test`
-    - `REDIS_HOST=redis-test`
-    - Other service hostnames and ports
-
-- **Common Issues and Solutions**
-  - If tests fail with import errors:
-    - ✅ Use `make test` instead of direct pytest
-    - ✅ Check if Docker containers are running
-  - If tests can't connect to services:
-    - ✅ Use `make test-clean && make test`
-    - ✅ Check Docker network status
-
-- **Test File Structure**
-  ```python
-  # ✅ DO: Add this warning to test files
-  """
-  WARNING: These tests are designed to run in Docker.
-  Use 'make test' or related commands instead of running pytest directly.
-  See testing.mdc for more information.
-  """
-  ```
-
-- **Benefits of Docker Testing**
-  - Consistent environment across all developers
-  - Proper service isolation
-  - Automatic dependency management
-  - Clean state for each test run
-  - Matches CI/CD environment 
+  - For fully async tests, use `httpx.AsyncClient` and an ASGI transport instead.

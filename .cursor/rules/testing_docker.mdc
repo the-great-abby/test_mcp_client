@@ -1,0 +1,196 @@
+- **Docker Test Environment Setup**
+  - Always include necessary test dependencies in test Dockerfile:
+    ```dockerfile
+    # ✅ DO: Include test dependencies
+    RUN pip install pytest pytest-cov pytest-asyncio httpx
+    
+    # ❌ DON'T: Assume dependencies are available
+    CMD ["pytest"]  # Will fail if pytest isn't installed
+    ```
+  
+  - Verify test environment before running tests:
+    ```yaml
+    # ✅ DO: Add health checks for test services
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ```
+
+- **Test Container Configuration**
+  - Use explicit test commands in docker-compose:
+    ```yaml
+    # ✅ DO: Specify full test command with parameters
+    command: ["pytest", "--cov=app", "--cov-report=html", "tests/"]
+    
+    # ❌ DON'T: Use bare commands without paths
+    command: pytest  # May fail to find tests
+    ```
+
+  - Set proper working directory:
+    ```yaml
+    # ✅ DO: Set working directory explicitly
+    working_dir: /app
+    
+    # ❌ DON'T: Rely on default working directory
+    command: ["pytest", "tests"]  # May fail if pwd is wrong
+    ```
+
+- **Test Dependencies Management**
+  - Maintain separate test requirements:
+    ```
+    # ✅ DO: Create requirements-test.txt
+    pytest>=7.0.0
+    pytest-cov>=4.0.0
+    pytest-asyncio>=0.21.0
+    httpx>=0.24.0
+    
+    # ❌ DON'T: Mix test dependencies in main requirements.txt
+    ```
+
+- **WebSocket Testing Guidelines**
+  - Use appropriate test client setup:
+    ```python
+    # ✅ DO: Use proper async test client setup
+    from httpx import AsyncClient
+    
+    async def test_websocket():
+        async with AsyncClient(app=app, base_url="http://test") as client:
+            async with client.websocket_connect("/ws") as websocket:
+                # Test logic here
+    
+    # ❌ DON'T: Mix sync/async clients incorrectly
+    def test_wrong():
+        with TestClient(app) as client:  # Wrong for WebSocket tests
+            with client.websocket_connect("/"):  # Will fail
+                pass
+    ```
+
+- **Test Environment Variables**
+  - Set explicit test environment variables:
+    ```yaml
+    # ✅ DO: Define all required test env vars
+    environment:
+      - POSTGRES_DB=test_db
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_pass
+      - POSTGRES_HOST=db-test
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis-test
+      - REDIS_PORT=6379
+    
+    # ❌ DON'T: Rely on default values
+    environment:
+      - POSTGRES_DB=test_db  # Missing other required vars
+    ```
+
+- **Test Networking**
+  - Use proper service names for container networking:
+    ```yaml
+    # ✅ DO: Reference services by container names
+    POSTGRES_HOST=db-test
+    REDIS_HOST=redis-test
+    
+    # ❌ DON'T: Use localhost for container services
+    POSTGRES_HOST=localhost  # Won't work inside container
+    ```
+
+- **Common Pitfalls**
+  - Never run tests directly on the local system:
+    ```bash
+    # ❌ DON'T: Run tests locally
+    pytest tests/  # Wrong: will use local environment
+    python -m pytest  # Wrong: may have different dependencies
+    
+    # ✅ DO: Use Docker Compose through Makefile targets
+    make test  # Correct: uses containerized environment
+    docker compose -f docker-compose.test.yml exec backend-test pytest  # Also correct
+    ```
+
+  - Always wait for dependent services:
+    ```bash
+    # ✅ DO: Add wait period or health checks
+    sleep 5 && pytest  # Simple wait
+    # Or better, use wait-for-it.sh
+    
+    # ❌ DON'T: Start tests immediately
+    pytest  # May fail if services aren't ready
+    ```
+  
+  - Handle test cleanup properly:
+    ```yaml
+    # ✅ DO: Include cleanup in compose
+    down:
+      command: docker compose -f docker-compose.test.yml down -v --remove-orphans
+    
+    # ❌ DON'T: Leave test containers running
+    ```
+
+- **Test Coverage Requirements**
+  - Maintain minimum coverage thresholds:
+    ```ini
+    # ✅ DO: Set coverage requirements in pytest.ini
+    [pytest]
+    mincover = 80
+    
+    # ❌ DON'T: Skip coverage checks
+    ```
+
+- **Test Database Setup**
+  - Always create test database in container initialization:
+    ```yaml
+    # ✅ DO: Include database creation in service initialization
+    services:
+      db-test:
+        image: postgres:15
+        environment:
+          - POSTGRES_DB=test_db
+          - POSTGRES_USER=test_user
+          - POSTGRES_PASSWORD=test_pass
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U test_user -d test_db"]
+        volumes:
+          - ./scripts/init-test-db.sh:/docker-entrypoint-initdb.d/init-test-db.sh
+    ```
+
+  - Ensure migrations run before tests:
+    ```makefile
+    # ✅ DO: Include migration step in test target
+    test:
+      docker compose -f docker-compose.test.yml run --rm backend-test alembic upgrade head
+      docker compose -f docker-compose.test.yml run --rm backend-test pytest
+
+    # ❌ DON'T: Run tests without migrations
+    test:
+      docker compose -f docker-compose.test.yml run --rm backend-test pytest  # Will fail
+    ```
+
+  - Create initialization script for test database:
+    ```bash
+    # ✅ DO: Create init-test-db.sh
+    #!/bin/bash
+    set -e
+
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE DATABASE test_db;
+        GRANT ALL PRIVILEGES ON DATABASE test_db TO test_user;
+    EOSQL
+
+    # ❌ DON'T: Rely on manual database creation
+    # This leads to "database test_db does not exist" errors
+    ```
+
+  - Handle test database cleanup:
+    ```yaml
+    # ✅ DO: Include database cleanup in test teardown
+    test-cleanup:
+      docker compose -f docker-compose.test.yml exec db-test psql -U postgres -c "DROP DATABASE IF EXISTS test_db"
+      docker compose -f docker-compose.test.yml down -v
+
+    # ❌ DON'T: Leave test databases lingering
+    test-cleanup:
+      docker compose -f docker-compose.test.yml down  # Volumes persist
+    ```
+
+Reference [testing.mdc](mdc:.cursor/rules/testing.mdc) for general testing guidelines. 

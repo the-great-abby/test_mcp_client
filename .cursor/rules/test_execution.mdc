@@ -1,0 +1,48 @@
+# Test Execution Guidelines
+
+## Preferred Test Execution Method
+Always run tests using the Makefile.ai target with logging enabled:
+```bash
+make -f Makefile.ai ai-test-log
+```
+
+This command:
+1. Ensures tests run in the correct Docker environment
+2. Captures detailed logs for debugging
+3. Maintains proper container lifecycle
+4. Provides structured test output
+
+## Alternative Test Commands
+If you need to run specific test types, use these Makefile.ai targets:
+- `make -f Makefile.ai ai-test-websocket` - Run only WebSocket tests
+- `make -f Makefile.ai ai-test-unit` - Run only unit tests
+- `make -f Makefile.ai ai-test-integration` - Run only integration tests
+- `make -f Makefile.ai ai-test-coverage` - Run tests with coverage reporting
+
+## Important Notes
+- Never run pytest directly from the command line
+- Always use the Makefile.ai targets to ensure proper test environment setup
+- Check the logs in the test-reports directory for detailed error information
+- The ai-test-log target provides the most comprehensive output for debugging
+
+## Common Issues
+If tests fail:
+1. Check the test-reports directory for detailed logs
+2. Verify all required services are running (use `docker compose -f docker-compose.test.yml ps`)
+3. Ensure the test database is properly initialized
+4. Check for any rate limiting or connection issues in the logs
+
+## Test Environment Setup
+Before running tests:
+1. Ensure the test environment is properly set up:
+   ```bash
+   make -f Makefile.ai test-setup
+   ```
+2. Start the test containers:
+   ```bash
+   make -f Makefile.ai ai-up-test
+   ```
+3. Run the tests with logging:
+   ```bash
+   make -f Makefile.ai ai-test-log
+   ``` 

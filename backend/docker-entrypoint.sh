@@ -19,13 +19,21 @@ wait_for_postgres() {
 # Wait for postgres
 wait_for_postgres
 
-# Only run migrations if not in test environment
-if [ "$ENVIRONMENT" != "test" ]; then
-    echo "Running database migrations..."
-    alembic upgrade head
-else
-    echo "Test environment detected, skipping migrations..."
-fi
+# Handle database setup
+echo "Setting up database..."
+# Create database if it doesn't exist
+PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '$POSTGRES_DB'" | grep -q 1 || PGPASSWORD=$POSTGRES_PASSWORD psql -h $POSTGRES_HOST -U $POSTGRES_USER -d postgres -c "CREATE DATABASE $POSTGRES_DB"
+# Set up tables using SQLAlchemy
+python -c "
+from app.db.base import Base, engine
+import asyncio
+
+async def setup_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+asyncio.run(setup_db())
+"
 
 # Start the application
 echo "Starting the application..."

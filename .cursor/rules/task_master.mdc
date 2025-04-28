@@ -1,3 +1,8 @@
+---
+description: taskmaster related
+globs: 
+alwaysApply: false
+---
 # Task Master CLI Usage
 
 - **Overview**

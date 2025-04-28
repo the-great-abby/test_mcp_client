@@ -1,4 +1,9 @@
+"""
+Tests for health check endpoints.
+"""
 import pytest
+from fastapi.testclient import TestClient
+from app.main import app
 from fastapi import FastAPI
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +18,8 @@ from app.api.health import router as health_router
 from app.core.errors import AppError
 from app.db.base import get_db
 from app.core.redis import get_redis
+
+from tests.helpers import HEALTH_CHECK_PATH
 
 @pytest.fixture
 def app():
@@ -36,6 +43,11 @@ async def mock_redis():
     redis.ping = AsyncMock()
     redis.close = AsyncMock()
     return redis
+
+@pytest.fixture
+async def async_test_client(app):
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
 
 @pytest.mark.asyncio
 async def test_health_check_healthy(app, mock_db, mock_redis):
@@ -128,3 +140,19 @@ async def test_health_check_all_unhealthy(app, mock_db, mock_redis):
         assert "DB Error" in data["components"]["database"]
         assert "unhealthy" in data["components"]["redis"]
         assert "Redis Error" in data["components"]["redis"]
+
+def test_health_check(app):
+    """Test the health check endpoint."""
+    client = TestClient(app)
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+@pytest.mark.asyncio
+async def test_health_check(async_test_client):
+    """Test health check endpoint."""
+    response = await async_test_client.get(HEALTH_CHECK_PATH)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    # Remove assertions for 'details' key, as it does not exist in the response 

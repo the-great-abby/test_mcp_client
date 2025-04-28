@@ -1,3 +1,8 @@
+---
+description: filepath associations
+globs: 
+alwaysApply: false
+---
 - **Project Structure Reference**
   - `/backend/` - Python FastAPI backend code
     - `/app/` - Main application code

@@ -3,12 +3,13 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import os
 from app.db.base import Base
 from app.models.context import Context
+import uuid
 
 class MessageRole(str, Enum):
     USER = "user"
@@ -18,9 +19,10 @@ class MessageRole(str, Enum):
 class Message(Base):
     __tablename__ = "messages"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     content = Column(String, nullable=False)
     role = Column(String, nullable=False)  # Store as string, not enum
+    meta_data = Column(JSONB, nullable=True)
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,
@@ -32,20 +34,20 @@ class Message(Base):
         server_default=text("now()")
     )
     conversation_id = Column(
-        Integer,
-        ForeignKey("conversations.id", ondelete="CASCADE"),
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE", deferrable=True, initially="DEFERRED"),
         nullable=False
     )
     user_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
+        ForeignKey("users.id", ondelete="CASCADE", deferrable=True, initially="DEFERRED"),
         nullable=False
     )
 
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
     user = relationship("User", back_populates="messages")
-    context = relationship("Context", back_populates="message", uselist=False)
+    contexts = relationship("Context", back_populates="message")
 
     def __repr__(self):
-        return f"<Message {self.id} ({self.role})>" 
+        return f"<Message {self.id} ({self.role})>"

@@ -1,0 +1,40 @@
+---
+description: Standardize test execution to 'make test' for all environments
+globs: tests/**/*.py
+alwaysApply: true
+---
+
+# Test Execution Standard: `make test`
+
+- **Overview**
+  - All tests MUST be run using the `make test` command.
+  - Direct invocation of `pytest` or other test runners is NOT supported.
+  - This ensures tests run in the correct Docker Compose environment with all dependencies and network isolation.
+
+- **Requirements**
+  - Always use `make test` (or other Makefile targets like `make test-unit`, `make test-integration`) to execute tests.
+  - Do NOT run `pytest` directly from the CLI, IDE, or scripts.
+  - Ensure the Makefile and Docker Compose test environment are up to date and used for all test runs.
+
+- **Examples**
+  ```bash
+  # ✅ DO: Use Makefile targets
+  make test
+  make test-unit
+  make test-integration
+
+  # ❌ DON'T: Run pytest directly
+  pytest
+  python -m pytest
+  pytest tests/
+  ```
+
+- **Best Practices**
+  - Use Makefile targets for all test execution to ensure consistent environments.
+  - Keep test and development environments isolated.
+  - Reference the [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) rule for details on Docker Compose and Makefile usage.
+
+- **References**
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc)
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc)
+  - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc) 

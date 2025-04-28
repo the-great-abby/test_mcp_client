@@ -5,33 +5,19 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.db.base import Base
-
-# Create async engine
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    pool_pre_ping=True,
-    echo=True
-)
-
-# Create async session factory
-AsyncSessionLocal = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False
-)
+from app.db.engine import get_engine, get_async_sessionmaker
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    """Get a database session."""
-    async with AsyncSessionLocal() as session:
+    engine = get_engine()
+    async_session = get_async_sessionmaker(engine)
+    async with async_session() as session:
         try:
             yield session
         finally:
             await session.close()
+    await engine.dispose()
 
 async def init_db() -> None:
-    """Initialize the database."""
     try:
         # Create test database if it doesn't exist
         default_db_url = settings.SQLALCHEMY_DATABASE_URI.rsplit('/', 1)[0] + '/postgres'
@@ -47,18 +33,28 @@ async def init_db() -> None:
                 {"dbname": settings.POSTGRES_DB}
             )
             if not result.scalar():
+                print(f"Creating database {settings.POSTGRES_DB}")
                 # Create database
                 await conn.execute(text(f'CREATE DATABASE "{settings.POSTGRES_DB}"'))
+                print(f"Database {settings.POSTGRES_DB} created successfully")
         
         await default_engine.dispose()
         
-        # Create tables
+        # Create all tables from models
+        print("Creating database tables from SQLAlchemy models...")
+        engine = get_engine()
         async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+            if settings.NODE_ENV == "test":
+                # Drop all tables first in test environment
+                print("Test environment detected - dropping all tables first...")
+                await conn.run_sync(Base.metadata.drop_all)
             
+            # Create all tables
+            await conn.run_sync(Base.metadata.create_all)
+            print("Database tables created successfully")
+        await engine.dispose()
+        
     except Exception as e:
-        # Log error but don't raise - let the application handle database issues
         print(f"Error initializing database: {str(e)}")
-        # If we're in test mode, we might want to raise the error
         if settings.NODE_ENV == "test":
             raise 

@@ -3,44 +3,44 @@ import pytest
 from redis.asyncio import Redis
 from app.core.cache import get_cached_data, set_cached_data, invalidate_cache, get_cache_key
 from unittest.mock import AsyncMock
-from tests.conftest import MockRedis
+from tests.helpers import MockRedis
 import json
 
 @pytest.fixture
-async def redis_client():
+async def async_redis_client():
     """Create a mock Redis client for testing."""
     client = MockRedis()
     yield client
 
 @pytest.mark.asyncio
-async def test_cache_operations(redis_client):
+async def test_cache_operations(async_redis_client, initialize_test_db):
     """Test basic cache operations."""
     test_key = "test:key"
     test_data = {"message": "Hello, World!"}
     
     # Test setting data
-    success = await set_cached_data(redis_client, test_key, test_data)
+    success = await set_cached_data(async_redis_client, test_key, test_data)
     assert success is True
     
     # Test getting data
-    cached_data = await get_cached_data(redis_client, test_key)
+    cached_data = await get_cached_data(async_redis_client, test_key)
     assert cached_data == test_data
     
     # Test cache expiry
-    success = await set_cached_data(redis_client, "expiry:test", "temp", expiry=1)
+    success = await set_cached_data(async_redis_client, "expiry:test", "temp", expiry=1)
     assert success is True
     await asyncio.sleep(1.1)  # Wait for expiry
-    expired_data = await get_cached_data(redis_client, "expiry:test")
+    expired_data = await get_cached_data(async_redis_client, "expiry:test")
     assert expired_data is None
     
     # Test cache invalidation
-    success = await invalidate_cache(redis_client, test_key)
+    success = await invalidate_cache(async_redis_client, test_key)
     assert success is True
-    invalidated_data = await get_cached_data(redis_client, test_key)
+    invalidated_data = await get_cached_data(async_redis_client, test_key)
     assert invalidated_data is None
 
 @pytest.mark.asyncio
-async def test_cache_key_generation():
+async def test_cache_key_generation(async_redis_client):
     """Test cache key generation with different input types."""
     # Test string input
     key1 = get_cache_key("test", "key")
@@ -79,7 +79,7 @@ async def test_cache_key_generation():
     assert key7 == "[]:{}",  "Empty lists and dicts should be represented as [] and {}"
 
 @pytest.mark.asyncio
-async def test_cache_data_types(redis_client):
+async def test_cache_data_types(async_redis_client, initialize_test_db):
     """Test caching different data types."""
     test_cases = [
         ("string:test", json.dumps("Hello")),  # JSON encode string
@@ -94,11 +94,11 @@ async def test_cache_data_types(redis_client):
     
     for key, value in test_cases:
         # Set value
-        success = await set_cached_data(redis_client, key, value)
+        success = await set_cached_data(async_redis_client, key, value)
         assert success is True
         
         # Get and verify value
-        cached = await get_cached_data(redis_client, key)
+        cached = await get_cached_data(async_redis_client, key)
         if isinstance(value, str):
             # For string values, we need to JSON decode them
             assert cached == json.loads(value)
@@ -106,69 +106,69 @@ async def test_cache_data_types(redis_client):
             assert cached == value
 
 @pytest.mark.asyncio
-async def test_cache_errors(redis_client):
+async def test_cache_errors(async_redis_client, initialize_test_db):
     """Test error handling in cache operations."""
     # Test None key
     with pytest.raises(ValueError):
-        await get_cached_data(redis_client, None)
+        await get_cached_data(async_redis_client, None)
     
     # Test empty key
     with pytest.raises(ValueError):
-        await set_cached_data(redis_client, "", "data")
+        await set_cached_data(async_redis_client, "", "data")
     
     # Test None data
     with pytest.raises(ValueError):
-        await set_cached_data(redis_client, "key", None)
+        await set_cached_data(async_redis_client, "key", None)
     
     # Test negative expiry
     with pytest.raises(ValueError):
-        await set_cached_data(redis_client, "key", "data", expiry=-1)
+        await set_cached_data(async_redis_client, "key", "data", expiry=-1)
     
     # Test None redis client
     with pytest.raises(AttributeError):
         await get_cached_data(None, "key")
 
 @pytest.mark.asyncio
-async def test_cache_error_handling(redis_client, monkeypatch):
+async def test_cache_error_handling(async_redis_client, monkeypatch):
     """Test error handling for Redis operations."""
     
     # Test Redis get error
     async def mock_get(*args, **kwargs):
         raise Exception("Redis get error")
-    monkeypatch.setattr(redis_client, "get", mock_get)
+    monkeypatch.setattr(async_redis_client, "get", mock_get)
     
-    result = await get_cached_data(redis_client, "test:key")
+    result = await get_cached_data(async_redis_client, "test:key")
     assert result is None
     
     # Test Redis set error
     async def mock_set(*args, **kwargs):
         raise Exception("Redis set error")
-    monkeypatch.setattr(redis_client, "set", mock_set)
+    monkeypatch.setattr(async_redis_client, "set", mock_set)
     
-    success = await set_cached_data(redis_client, "test:key", "data")
+    success = await set_cached_data(async_redis_client, "test:key", "data")
     assert success is False
     
     # Test Redis delete error
     async def mock_delete(*args, **kwargs):
         raise Exception("Redis delete error")
-    monkeypatch.setattr(redis_client, "delete", mock_delete)
+    monkeypatch.setattr(async_redis_client, "delete", mock_delete)
     
-    success = await invalidate_cache(redis_client, "test:key")
+    success = await invalidate_cache(async_redis_client, "test:key")
     assert success is False
     
     # Test non-JSON data handling
     async def mock_get_bytes(*args, **kwargs):
         return b"not json"
-    monkeypatch.setattr(redis_client, "get", mock_get_bytes)
+    monkeypatch.setattr(async_redis_client, "get", mock_get_bytes)
     
-    result = await get_cached_data(redis_client, "test:key")
+    result = await get_cached_data(async_redis_client, "test:key")
     assert result == b"not json"  # Should return raw data when JSON parsing fails
     
     # Test JSON serialization error
     class UnserializableObject:
         pass
     
-    success = await set_cached_data(redis_client, "test:key", UnserializableObject())
+    success = await set_cached_data(async_redis_client, "test:key", UnserializableObject())
     assert success is False
 
 @pytest.mark.asyncio
@@ -188,7 +188,7 @@ async def test_cache_key_edge_cases():
     assert "b=2" in key2
 
 @pytest.mark.asyncio
-async def test_cache_set_exceptions():
+async def test_cache_set_exceptions(initialize_test_db):
     """Test exception handling in set_cached_data."""
     redis_client = AsyncMock()
     redis_client.set.side_effect = Exception("Redis error")

@@ -1,0 +1,117 @@
+---
+description: Guidelines for executing pytest within Docker Compose environment
+globs: backend/tests/**/*.py
+alwaysApply: true
+---
+
+# Pytest Execution Guidelines
+
+- **Core Requirements**
+  - **Execution Environment**
+    - All pytest commands MUST run through Docker Compose
+    - Tests MUST execute within the test network
+    - Use Makefile targets for standardization
+    ```bash
+    # ✅ Correct: Using Makefile targets
+    make test
+    make test-unit
+    make test-integration
+    
+    # ❌ Incorrect: Direct pytest execution
+    pytest backend/tests/
+    python -m pytest
+    ```
+
+- **Makefile Target Structure**
+  - **Required Components**
+    ```makefile
+    # Base test command
+    test:
+        docker compose -f docker-compose.test.yml run --rm backend-test pytest
+
+    # Specific test suites
+    test-unit:
+        docker compose -f docker-compose.test.yml run --rm backend-test pytest backend/tests/unit
+
+    test-integration:
+        docker compose -f docker-compose.test.yml run --rm backend-test pytest backend/tests/integration
+    ```
+
+- **Network Requirements**
+  - **Service Resolution**
+    - Tests must access services via Docker network names:
+      ```python
+      # ✅ Correct: Using Docker service names
+      POSTGRES_HOST = "db-test"
+      REDIS_HOST = "redis-test"
+      
+      # ❌ Incorrect: Using localhost
+      POSTGRES_HOST = "localhost"
+      REDIS_HOST = "127.0.0.1"
+      ```
+    
+    - Internal ports must be used:
+      ```python
+      # ✅ Correct: Internal ports
+      POSTGRES_PORT = 5432
+      REDIS_PORT = 6379
+      
+      # ❌ Incorrect: External mapped ports
+      POSTGRES_PORT = 5433
+      REDIS_PORT = 6380
+      ```
+
+- **Environment Variables**
+  - **Required Settings**
+    ```env
+    ENVIRONMENT=test
+    POSTGRES_HOST=db-test
+    POSTGRES_PORT=5432
+    REDIS_HOST=redis-test
+    REDIS_PORT=6379
+    ```
+
+- **Best Practices**
+  - ✅ DO: Use Makefile targets for all test execution
+  - ✅ DO: Run tests in isolated test network
+  - ✅ DO: Use Docker service names for connections
+  - ✅ DO: Keep test environment isolated
+  - ✅ DO: Use internal Docker network ports
+  - ❌ DON'T: Run pytest directly on host
+  - ❌ DON'T: Use localhost or external ports
+  - ❌ DON'T: Mix test and dev environments
+  - ❌ DON'T: Hardcode connection strings
+
+- **Common Issues**
+  - **Connection Failures**
+    - Symptom: "Connection refused" or "Host not found"
+    - Cause: Using localhost instead of service names
+    - Solution: Use Docker network service names
+  
+  - **Port Conflicts**
+    - Symptom: "Address already in use"
+    - Cause: Using external ports internally
+    - Solution: Use internal Docker network ports
+
+- **Testing Flow**
+  ```bash
+  # ✅ Correct workflow
+  1. Start test environment:
+     make test-env-up
+  
+  2. Run tests:
+     make test
+  
+  3. Clean up:
+     make test-env-down
+  
+  # ❌ Incorrect workflow
+  1. Running pytest directly
+  2. Using different port mappings
+  3. Mixing environments
+  ```
+
+- **References**
+  - [docker.mdc](mdc:.cursor/rules/docker.mdc) for container setup
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc) for environment configuration
+  - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc) for testing patterns 

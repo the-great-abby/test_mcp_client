@@ -1,1 +1,50 @@
- 
+# Development Workflow Guidelines
+
+## Overview
+- Use Docker for all development and testing
+- Follow the project's established patterns and practices
+- Maintain proper documentation
+- Write and maintain tests
+
+## Development Process
+1. Set up development environment
+   ```bash
+   make -f Makefile.ai ai-up
+   ```
+
+2. Make code changes
+   - Follow the project's coding standards
+   - Write tests for new features
+   - Update documentation as needed
+
+3. Test changes
+   ```bash
+   make -f Makefile.ai ai-test
+   ```
+
+4. Document changes
+   - Update relevant documentation
+   - Add comments for complex logic
+   - Document any new dependencies
+
+## Code Organization
+- Follow the project's directory structure
+- Use consistent naming conventions
+- Maintain proper documentation
+- Follow the style guide
+
+## Testing Process
+- Write tests for all new features
+- Maintain test coverage
+- Follow testing guidelines
+- Document test cases
+
+## Best Practices
+- ✅ DO: Use Docker for development
+- ✅ DO: Follow established patterns
+- ✅ DO: Write and maintain tests
+- ✅ DO: Keep documentation up to date
+- ❌ DON'T: Skip testing
+- ❌ DON'T: Ignore documentation
+- ❌ DON'T: Mix development and test environments
+- ❌ DON'T: Use local dependencies 

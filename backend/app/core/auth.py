@@ -7,11 +7,14 @@ from typing import Optional, Union, Any, Dict
 import logging
 from uuid import UUID
 from sqlalchemy import select
+from passlib.context import CryptContext
+from pydantic import ValidationError
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.core.errors import NotFoundError
 from app.db.session import get_async_session as get_db
-from app.models import User
+from app.models.user import User
+from app.schemas.token import TokenPayload
 
 logger = logging.getLogger(__name__)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
@@ -22,21 +25,25 @@ credentials_exception = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-async def verify_token(token: str) -> dict:
+async def verify_token(token: str, settings: Settings = settings) -> TokenPayload:
     """Verify JWT token."""
     try:
         logger.debug(f"Attempting to decode token: {token[:10]}...") # Log input
         payload = jwt.decode(
             token,
-            settings.SECRET_KEY,
-            algorithms=[settings.ALGORITHM]
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM]
         )
         logger.debug("Token decoded successfully") # Log success
-        # Check for required sub claim
-        if "sub" not in payload:
-            logger.error("Token missing sub claim")
-            raise credentials_exception
-        return payload
+        token_data = TokenPayload(**payload)
+        if not token_data.sub:
+            logger.error("Token missing 'sub' claim")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Could not validate credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return token_data
     except jose_exceptions.ExpiredSignatureError:
         logger.error("Token has expired")
         logger.info("ExpiredSignatureError caught, raising HTTPException.") # Add specific log
@@ -45,63 +52,48 @@ async def verify_token(token: str) -> dict:
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except (JWTError, jose_exceptions.JWTError, Exception) as e:
+    except (jwt.JWTError, ValidationError) as e:
         # This catches *any* other error during decode or sub check
         logger.error(f"Token verification failed: {str(e)}")
         logger.error(f"Caught exception type: {type(e).__name__}") # Log exception type
         logger.exception("Caught exception during token verification:")
-        raise credentials_exception # Raises 401
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 def create_access_token(
-    data: Optional[Dict[str, Any]] = None,
-    subject: Optional[Union[str, Any]] = None,
-    expires_delta: Optional[timedelta] = None
+    data: dict,
+    expires_delta: Optional[timedelta] = None,
+    settings: Settings = settings
 ) -> str:
-    """Create JWT access token.
-    
-    Args:
-        data: Optional dictionary of data to encode in the token
-        subject: Optional subject identifier (will be stored in sub claim)
-        expires_delta: Optional token expiration time
-    """
+    """Create JWT access token."""
+    to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode = data.copy() if data else {}
-    if subject:
-        to_encode["sub"] = subject
-    to_encode["exp"] = expire
-    
-    try:
-        encoded_jwt = jwt.encode(
-            to_encode,
-            settings.SECRET_KEY,
-            algorithm=settings.ALGORITHM
+        expire = datetime.utcnow() + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
-        return encoded_jwt
-    except Exception as e:
-        logger.error(f"Token creation failed: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail="Could not create access token"
-        )
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM
+    )
+    return encoded_jwt
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = settings
 ) -> User:
-    """Get current user from token.
-    
-    Args:
-        token: JWT token from oauth2_scheme
-        db: Database session
-    """
+    """Get current user from token."""
     try:
-        # Verify and decode the token
-        payload = await verify_token(token)
-        user_id_str = payload.get("sub")
+        # Verify and decode the token, passing settings
+        payload = await verify_token(token=token, settings=settings)
+        user_id_str = payload.sub
         if not user_id_str:
             raise credentials_exception
             
@@ -128,4 +120,11 @@ async def get_current_user(
         raise
     except Exception as e:
         logger.error(f"Error processing token: {str(e)}")
-        raise credentials_exception 
+        raise credentials_exception
+
+# Define pwd_context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    """Get password hash."""
+    return pwd_context.hash(password) 

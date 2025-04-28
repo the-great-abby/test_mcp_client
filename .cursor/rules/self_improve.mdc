@@ -1,9 +1,8 @@
 ---
-description: Guidelines for continuously improving Cursor rules based on emerging code patterns and best practices.
-globs: **/*
+description: 
+globs: 
 alwaysApply: true
 ---
-
 - **Rule Improvement Triggers:**
   - New code patterns not covered by existing rules
   - Repeated similar implementations across files
@@ -66,6 +65,11 @@ alwaysApply: true
 
 - **Documentation Updates:**
   - Keep examples synchronized with code
+  - Update references to external docs
+  - Maintain links between related rules
+  - Document breaking changes
+
+Follow [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc) for proper rule formatting and structure.
   - Update references to external docs
   - Maintain links between related rules
   - Document breaking changes

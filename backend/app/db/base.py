@@ -1,15 +1,23 @@
-from sqlalchemy.orm import declarative_base
+"""
+SQLAlchemy base configuration.
+"""
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import AsyncGenerator
-from app.db.engine import async_session
+from sqlalchemy.orm import sessionmaker
 
-# Create the SQLAlchemy declarative base
-Base = declarative_base()
+# Import Base and engine
+from app.db.base_class import Base  # noqa: F401
+from app.db.engine import get_engine, get_async_sessionmaker, engine
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for getting async database session."""
-    async with async_session() as session:
+async def get_db():
+    engine = get_engine()
+    async_session = get_async_sessionmaker(engine)
+    async with async_session() as db:
         try:
-            yield session
+            yield db
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
         finally:
-            await session.close() 
+            await db.close()
+    await engine.dispose()

@@ -1,0 +1,112 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# WebSocket Testing Patterns (Async & Sync)
+
+- **Overview**
+  - Standardize websocket testing in FastAPI projects.
+  - Use async-safe helpers for async test suites (`pytest-asyncio`, `websockets` library).
+  - Use sync-safe helpers for sync test suites (`TestClient`).
+  - Prevents event loop deadlocks and ensures maintainable, clear test code.
+
+- **Async WebSocket Test Helpers**
+  - Use the `websockets` library for async websocket connections in tests under `tests/async/`.
+  - Example helper:
+    ```python
+    import websockets
+    import json
+    
+    async def async_ws_connect(uri, send_msgs=None, receive_count=1):
+        async with websockets.connect(uri) as ws:
+            responses = []
+            if send_msgs:
+                for msg in send_msgs:
+                    await ws.send(json.dumps(msg))
+                    for _ in range(receive_count):
+                        resp = json.loads(await ws.recv())
+                        responses.append(resp)
+            yield ws, responses
+    ```
+  - Example usage:
+    ```python
+    @pytest.mark.asyncio
+    async def test_async_ws():
+        uri = "ws://backend-test:8000/api/v1/ws"
+        async with websockets.connect(uri) as ws:
+            await ws.send(json.dumps({"type": "ping"}))
+            msg = json.loads(await ws.recv())
+            assert msg["type"] == "pong"
+    ```
+  - **Advanced Example:**
+    ```python
+    @pytest.mark.asyncio
+    async def test_multiple_ws_connections():
+        uri = "ws://backend-test:8000/api/v1/ws"
+        async with websockets.connect(uri) as ws1, websockets.connect(uri) as ws2:
+            await ws1.send(json.dumps({"type": "ping"}))
+            await ws2.send(json.dumps({"type": "ping"}))
+            msg1 = json.loads(await ws1.recv())
+            msg2 = json.loads(await ws2.recv())
+            assert msg1["type"] == "pong"
+            assert msg2["type"] == "pong"
+    ```
+
+- **Sync WebSocket Test Helpers**
+  - Use FastAPI's `TestClient` for sync websocket tests in `tests/`.
+  - Example helper:
+    ```python
+    from fastapi.testclient import TestClient
+    
+    def sync_ws_connect(client: TestClient, path, send_msgs=None, receive_count=1):
+        with client.websocket_connect(path) as ws:
+            responses = []
+            if send_msgs:
+                for msg in send_msgs:
+                    ws.send_json(msg)
+                    for _ in range(receive_count):
+                        resp = ws.receive_json()
+                        responses.append(resp)
+            return ws, responses
+    ```
+  - Example usage:
+    ```python
+    def test_sync_ws(test_client):
+        ws, responses = sync_ws_connect(test_client, "/api/v1/ws", [{"type": "ping"}])
+        assert responses[0]["type"] == "pong"
+    ```
+  - **Advanced Example:**
+    ```python
+    def test_multiple_sync_ws(test_client):
+        ws1, responses1 = sync_ws_connect(test_client, "/api/v1/ws", [{"type": "ping"}])
+        ws2, responses2 = sync_ws_connect(test_client, "/api/v1/ws", [{"type": "ping"}])
+        assert responses1[0]["type"] == "pong"
+        assert responses2[0]["type"] == "pong"
+    ```
+
+- **Best Practices**
+  - **Async tests**: Use only async helpers and the `websockets` library in `tests/async/`.
+  - **Sync tests**: Use only sync helpers and `TestClient` in `tests/`.
+  - Never mix sync and async test clients in the same test file.
+  - Document which helper to use in which context.
+  - Add debug prints for easier troubleshooting.
+  - Use Makefile targets for all test execution (see [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc)).
+  - Run tests in Docker Compose for network/service consistency (see [testing.mdc](mdc:.cursor/rules/testing.mdc)).
+  - Follow the test-debug-retest cycle (see [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc)).
+  - Organize and maintain rules as described in [meta.mdc](mdc:.cursor/rules/meta.mdc).
+
+- **Anti-patterns**
+  - ❌ Mixing sync and async clients in the same test file.
+  - ❌ Running pytest directly on the host (see [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc)).
+  - ❌ Using localhost instead of Docker service names for networked services.
+  - ❌ Hardcoding connection strings or ports.
+
+- **References**
+  - [websockets library](https://websockets.readthedocs.io/)
+  - [FastAPI TestClient docs](https://fastapi.tiangolo.com/advanced/testing-websockets/)
+  - [pytest-asyncio](https://pytest-asyncio.readthedocs.io/)
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc)
+  - [testing.mdc](mdc:.cursor/rules/testing.mdc)
+  - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc)
+  - [meta.mdc](mdc:.cursor/rules/meta.mdc)

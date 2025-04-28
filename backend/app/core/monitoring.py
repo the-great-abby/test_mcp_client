@@ -61,41 +61,10 @@ class RateLimiter:
     async def check_rate_limit(self, user_id: str) -> bool:
         """Check if user has exceeded rate limit."""
         key = self._get_key(user_id)
-        
-        try:
-            # Get current count first
-            count = await self.redis.get(key)
-            
-            # If key doesn't exist or is expired, start fresh
-            if count is None:
-                await self.redis.set(key, "1", ex=self.window_seconds)
-                return True
-                
-            try:
-                current = int(count.decode())
-                # Check if current count already exceeds limit
-                if current >= self.requests_per_window:
-                    return False
-                    
-                # Increment counter and refresh expiry
-                pipe = self.redis.pipeline()
-                await pipe.incr(key)
-                await pipe.expire(key, self.window_seconds)
-                results = await pipe.execute()
-                
-                # Return True only if we're still under the limit
-                return results[0] <= self.requests_per_window
-                
-            except (ValueError, UnicodeDecodeError):
-                # If count is corrupted, reset it
-                await self.redis.delete(key)
-                await self.redis.set(key, "1", ex=self.window_seconds)
-                return True
-                
-        except Exception as e:
-            # Handle any Redis connection errors by allowing the request
-            # This prevents the rate limiter from blocking all traffic if Redis is down
-            return True
+        count = await self.redis.incr(key)
+        if count == 1:
+            await self.redis.expire(key, self.window_seconds)
+        return count <= self.requests_per_window
 
 class TelemetryService:
     """Service for tracking API usage and metrics."""
