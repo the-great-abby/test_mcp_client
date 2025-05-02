@@ -20,10 +20,14 @@ services:
       - ENVIRONMENT=test
       - TEST_HOST=backend-test
       - TEST_PORT=8000
+      - UVICORN_RELOAD=false  # Control auto-reload through environment
+    env_file:
+      - .env.test
     volumes:
       - ./backend:/app
       - ./test-reports:/app/test-reports
       - ./scripts:/app/scripts
+      - /Users/abby/code/ai_projects/mcp_chat_client/coverage_data:/app/coverage_data
     depends_on:
       - db-test
       - redis-test
@@ -35,6 +39,8 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
+    mem_limit: 4g
+    cpus: 2.0
 
   db-test:
     image: postgres:15
@@ -53,6 +59,15 @@ services:
     image: redis:7
     ports:
       - "6380:6379"  # External:Internal
+    command: redis-server --appendonly yes --databases 16
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
       - test-network
 

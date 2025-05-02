@@ -1,0 +1,47 @@
+# AI-optimized Makefile for test execution
+
+.PHONY: ai-env-up ai-env-down ai-test ai-test-unit ai-test-integration ai-test-websocket ai-test-clean ai-open-coverage ai-open-coverage-win
+
+# Default test arguments
+PYTEST_ARGS ?= -x -v
+
+# Start test environment
+ai-env-up:
+	docker compose -f docker-compose.test.yml up -d
+
+# Stop test environment
+ai-env-down:
+	docker compose -f docker-compose.test.yml down -v
+
+# Clean test environment
+ai-test-clean:
+	docker compose -f docker-compose.test.yml down -v
+	rm -rf .coverage htmlcov/ test-reports/ .pytest_cache/
+
+# Run all tests
+ai-test:
+	docker compose -f docker-compose.test.yml run --rm backend-test pytest $(PYTEST_ARGS)
+
+# Run unit tests
+ai-test-unit:
+	docker compose -f docker-compose.test.yml run --rm backend-test pytest tests/unit $(PYTEST_ARGS)
+
+# Run integration tests
+ai-test-integration:
+	docker compose -f docker-compose.test.yml run --rm backend-test pytest tests/integration $(PYTEST_ARGS)
+
+# Run WebSocket tests
+ai-test-websocket:
+	docker compose -f docker-compose.test.yml run --rm backend-test pytest tests/integration/websocket tests/unit/websocket $(PYTEST_ARGS)
+
+# Run tests with coverage
+ai-test-coverage:
+	docker compose -f docker-compose.test.yml run --rm backend-test pytest --cov=app --cov-report=html --cov-report=term-missing $(PYTEST_ARGS)
+
+# Open the HTML coverage report in the default browser (macOS)
+ai-open-coverage:
+	open htmlcov/index.html
+
+# Open the HTML coverage report in the default browser (Windows)
+ai-open-coverage-win:
+	start htmlcov/index.html 

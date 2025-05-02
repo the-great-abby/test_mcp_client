@@ -1,0 +1,32 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Core Business Logic Files (Backend)
+
+This rule documents which files and modules are considered core business logic for the backend project. These files should be prioritized for testing, code review, and coverage.
+
+## Key Directories & Files
+
+- **backend/app/core/websocket.py**: Main WebSocket manager and handler logic (connection, messaging, protocol handling).
+- **backend/app/core/websocket_rate_limiter.py**: WebSocket rate limiting (abuse prevention, resource management).
+- **backend/app/core/auth.py**: Authentication logic (token validation, user session management).
+- **backend/app/core/security.py**: Security logic (permissions, access control, encryption).
+- **backend/app/core/redis.py**: Redis integration (pub/sub, caching, state management).
+- **backend/app/core/errors.py**: Custom error types and error handling (including WebSocket errors).
+- **backend/app/core/model.py**: Core data models.
+- **backend/app/core/chat_message.py**: Chat message logic (formatting, validation, routing).
+- **backend/app/services/telemetry.py**: Telemetry and metrics collection.
+- **backend/app/models/**: ORM/data models for main entities (message, conversation, context, user, health).
+
+## Guidance
+- Prioritize these files for:
+  - Unit and integration testing
+  - Code coverage
+  - Code review
+- Update this rule as the codebase evolves or new business logic modules are added.
+
+## References
+- [file_paths.mdc](file_paths.mdc) for file organization standards
+- [testing.mdc](testing.mdc) for general testing standards

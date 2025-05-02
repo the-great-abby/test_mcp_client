@@ -1,0 +1,54 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Pytest Flag Requirements
+
+- **Required Flags**
+  - **Stop on First Failure (-x)**
+    ```bash
+    # ✅ DO: Include -x flag to stop on first failure
+    make -f Makefile.ai ai-test PYTEST_ARGS="-x"
+    make -f Makefile.ai ai-test-unit PYTEST_ARGS="-x"
+    
+    # ❌ DON'T: Run without -x flag
+    make -f Makefile.ai ai-test
+    docker compose -f docker-compose.test.yml run --rm backend-test pytest
+    ```
+
+- **Execution Preferences**
+  - **Always Use Makefile.ai**
+    ```bash
+    # ✅ DO: Use AI-optimized targets
+    make -f Makefile.ai ai-test PYTEST_ARGS="-x tests/integration/test_cache.py"
+    make -f Makefile.ai ai-test-unit PYTEST_ARGS="-x"
+    make -f Makefile.ai ai-test-integration PYTEST_ARGS="-x"
+    
+    # ❌ DON'T: Use docker-compose directly
+    docker compose -f docker-compose.test.yml run --rm backend-test pytest
+    docker compose -f docker-compose.test.yml run --rm backend-test pytest tests/
+    ```
+
+- **Benefits**
+  - Faster feedback on test failures
+  - More efficient debugging cycles
+  - Consistent test environment
+  - AI-optimized test selection
+  - Enhanced logging and reporting
+
+- **Common Issues**
+  - **Missing -x Flag**
+    - Symptom: Tests continue running after failure
+    - Impact: Longer feedback cycles
+    - Solution: Always include `-x` in `PYTEST_ARGS`
+  
+  - **Direct Docker Usage**
+    - Symptom: Inconsistent test environment
+    - Impact: Missing AI optimizations
+    - Solution: Use Makefile.ai targets
+
+- **References**
+  - [makefile_ai.mdc](mdc:.cursor/rules/makefile_ai.mdc) for AI-optimized targets
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) for execution guidelines
+  - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc) for testing patterns

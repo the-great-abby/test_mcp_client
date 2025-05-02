@@ -1,21 +1,47 @@
+"""
+Database session management.
+"""
 from typing import AsyncGenerator
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 from sqlalchemy import text
 
 from app.core.config import settings
 from app.db.base import Base
 from app.db.engine import get_engine, get_async_sessionmaker
+from app.db.base_models import *  # Import all models
 
-async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    engine = get_engine()
-    async_session = get_async_sessionmaker(engine)
-    async with async_session() as session:
+# Create async engine
+engine = create_async_engine(
+    settings.SQLALCHEMY_DATABASE_URI,
+    echo=settings.SQL_ECHO,
+    future=True,
+    poolclass=NullPool
+)
+
+# Create async session factory
+async_session_factory = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False
+)
+
+# Create session local class
+SessionLocal = async_session_factory
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """Get database session."""
+    async with async_session_factory() as session:
         try:
             yield session
         finally:
             await session.close()
-    await engine.dispose()
+
+# Alias for backward compatibility
+get_async_session = get_session
+get_db = get_session
 
 async def init_db() -> None:
     try:

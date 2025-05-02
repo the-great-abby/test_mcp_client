@@ -1,3 +1,8 @@
+---
+description: 
+globs: 
+alwaysApply: undefined
+---
 # Test Execution Guidelines
 
 ## Preferred Test Execution Method

@@ -233,9 +233,9 @@ async def test_user(db: AsyncSession) -> AsyncGenerator[User, None]:
                 await db.rollback() # Rollback potential failed delete transaction
 
 @pytest.fixture
-def websocket_manager() -> WebSocketManager:
+def websocket_manager(redis_client: RedisClient) -> WebSocketManager:
     """Create a fresh WebSocket manager for each test."""
-    manager = WebSocketManager()
+    manager = WebSocketManager(redis_client)
     yield manager
     # Clean up after test
     manager.message_history.clear()

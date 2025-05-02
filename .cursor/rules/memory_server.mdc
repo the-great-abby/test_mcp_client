@@ -1,0 +1,203 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Memory Server Usage Guidelines
+
+- **Overview**
+  - The memory server provides persistent storage for AI conversations
+  - Uses Docker container for isolation and portability
+  - Stores data in a named volume `claude-memory:/app/dist`
+  - Accessible via MCP server configuration
+
+- **Server Configuration**
+  ```json
+  {
+    "mcpServers": {
+      "memory": {
+        "command": "docker",
+        "args": [
+          "run",
+          "-i",
+          "-v",
+          "claude-memory:/app/dist",
+          "--rm",
+          "mcp/memory"
+        ]
+      }
+    }
+  }
+  ```
+
+- **Memory Operations**
+  - **Entity Creation**
+    ```typescript
+    // Create new entities in memory
+    mcp_memory_create_entities({
+      entities: [{
+        name: string,
+        entityType: string,
+        observations: string[]
+      }]
+    });
+    ```
+
+  - **Relation Creation**
+    ```typescript
+    // Create relations between entities
+    mcp_memory_create_relations({
+      relations: [{
+        from: string,
+        to: string,
+        relationType: string
+      }]
+    });
+    ```
+
+  - **Adding Observations**
+    ```typescript
+    // Add observations to existing entities
+    mcp_memory_add_observations({
+      observations: [{
+        entityName: string,
+        contents: string[]
+      }]
+    });
+    ```
+
+  - **Reading Memory**
+    ```typescript
+    // Read entire knowledge graph
+    mcp_memory_read_graph();
+
+    // Search for specific nodes
+    mcp_memory_search_nodes({
+      query: string
+    });
+
+    // Open specific nodes
+    mcp_memory_open_nodes({
+      names: string[]
+    });
+    ```
+
+  - **Memory Cleanup**
+    ```typescript
+    // Delete entities
+    mcp_memory_delete_entities({
+      entityNames: string[]
+    });
+
+    // Delete observations
+    mcp_memory_delete_observations({
+      deletions: [{
+        entityName: string,
+        observations: string[]
+      }]
+    });
+
+    // Delete relations
+    mcp_memory_delete_relations({
+      relations: [{
+        from: string,
+        to: string,
+        relationType: string
+      }]
+    });
+    ```
+
+- **Best Practices**
+  - ✅ DO: Create entities for important concepts, people, and events
+  - ✅ DO: Use descriptive relation types in active voice
+  - ✅ DO: Keep observations concise and factual
+  - ✅ DO: Regularly clean up unused entities and relations
+  - ✅ DO: Use semantic search for finding relevant information
+  - ❌ DON'T: Create duplicate entities
+  - ❌ DON'T: Store sensitive information
+  - ❌ DON'T: Create circular relations
+  - ❌ DON'T: Leave orphaned entities
+  - ❌ DON'T: Use ambiguous relation types
+
+- **Entity Types**
+  - `user`: User profiles and information
+  - `project`: Project-related entities
+  - `documentation`: Documentation and rules
+  - `organization`: Organizations and teams
+  - `event`: Significant events or milestones
+  - `skill`: Technical skills or capabilities
+  - `goal`: User or project goals
+  - `preference`: User preferences
+  - `behavior`: Observed behaviors or patterns
+
+- **Relation Types**
+  - `knows`: Knowledge or familiarity
+  - `works_on`: Project involvement
+  - `belongs_to`: Organizational membership
+  - `has_goal`: Goal association
+  - `uses`: Tool or technology usage
+  - `prefers`: Preference indication
+  - `demonstrates`: Behavior exhibition
+  - `documents`: Documentation relationship
+  - `depends_on`: Dependency relationship
+
+- **Volume Management**
+  ```bash
+  # Create memory volume
+  docker volume create claude-memory
+
+  # Inspect volume
+  docker volume inspect claude-memory
+
+  # Backup volume
+  docker run --rm -v claude-memory:/source -v $(pwd):/backup alpine tar czf /backup/memory-backup.tar.gz -C /source .
+
+  # Restore volume
+  docker run --rm -v claude-memory:/target -v $(pwd):/backup alpine tar xzf /backup/memory-backup.tar.gz -C /target
+  ```
+
+- **Troubleshooting**
+  - If memory server is unresponsive:
+    1. Check Docker container status
+    2. Verify volume exists and has correct permissions
+    3. Restart memory server container
+    4. Check logs for error messages
+    5. Verify MCP configuration is correct
+
+- **References**
+  - [docker.mdc](mdc:.cursor/rules/docker.mdc) for Docker configuration
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc) for environment setup
+  - [meta.mdc](mdc:.cursor/rules/meta.mdc) for rule maintenance
+
+- **System Limitations & Best Practices**
+  - **Tool Call Limits**
+    - ⚠️ Tool requests pause after 25 calls in a single conversation
+    - ⚠️ Conversations cannot continue after hitting the tool call limit
+    - ⚠️ Memory operations count towards the tool call limit
+    
+  - **Mitigation Strategies**
+    - ✅ Take notes early in the conversation
+    - ✅ Batch memory operations when possible
+    - ✅ Prioritize critical information storage
+    - ✅ Use semantic search to minimize redundant storage
+    - ✅ Plan memory operations before reaching limits
+    
+  - **Recommended Memory Update Points**
+    1. After user identification/introduction
+    2. When discovering new preferences/behaviors
+    3. When establishing new relationships
+    4. After completing major task milestones
+    5. Before starting complex operations
+    
+  - **Memory Operation Planning**
+    ```typescript
+    // Example of efficient batching
+    // Instead of multiple single operations:
+    mcp_memory_create_entities({ entities: [entity1] });
+    mcp_memory_create_entities({ entities: [entity2] });
+    
+    // Batch operations together:
+    mcp_memory_create_entities({
+      entities: [entity1, entity2, entity3]
+    });
+    ```

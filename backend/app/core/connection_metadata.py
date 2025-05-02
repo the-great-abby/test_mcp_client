@@ -13,7 +13,8 @@ class ConnectionMetadata:
         connected_at: Optional[datetime] = None,
         last_seen: Optional[datetime] = None,
         is_typing: bool = False,
-        ip_address: Optional[str] = None
+        ip_address: Optional[str] = None,
+        last_message_id: Optional[str] = None
     ):
         self.client_id = client_id
         self.user_id = user_id
@@ -22,6 +23,7 @@ class ConnectionMetadata:
         self.last_seen = last_seen or datetime.utcnow()
         self.is_typing = is_typing
         self.ip_address = ip_address
+        self.last_message_id = last_message_id
 
     def to_dict(self) -> dict:
         """Convert the metadata to a dictionary for serialization."""
@@ -32,7 +34,8 @@ class ConnectionMetadata:
             "connected_at": self.connected_at.isoformat(),
             "last_seen": self.last_seen.isoformat(),
             "is_typing": self.is_typing,
-            "ip_address": self.ip_address
+            "ip_address": self.ip_address,
+            "last_message_id": self.last_message_id
         }
 
     def update_last_seen(self) -> None:
@@ -47,4 +50,9 @@ class ConnectionMetadata:
     def set_state(self, state: ConnectionState) -> None:
         """Update the connection state."""
         self.state = state
+        self.update_last_seen()
+        
+    def update_last_message(self, message_id: str) -> None:
+        """Update the last message ID received by this connection."""
+        self.last_message_id = message_id
         self.update_last_seen() 

@@ -17,15 +17,30 @@ class ModelClient:
     def __init__(self):
         """Initialize the model client based on configuration."""
         self.provider = settings.MODEL_PROVIDER
-        if self.provider == "anthropic":
-            self.client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
-        else:
-            raise ValueError(f"Unsupported model provider: {self.provider}")
         
+        # Use mock client in test environment
+        if settings.ENVIRONMENT == "test":
+            try:
+                from tests.mocks.anthropic_mock import get_mock_anthropic
+                self.client = get_mock_anthropic()
+                logger.info("Using mock Anthropic client for testing")
+            except ImportError:
+                logger.warning("Could not import mock client, falling back to real client")
+                self._init_real_client()
+        else:
+            self._init_real_client()
+            
         self.model = settings.MODEL_NAME
         self.temperature = settings.MODEL_TEMPERATURE
         self.max_tokens = settings.MODEL_MAX_TOKENS
         logger.info(f"Initialized ModelClient with provider {self.provider}")
+    
+    def _init_real_client(self):
+        """Initialize the real Anthropic client."""
+        if self.provider == "anthropic":
+            self.client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        else:
+            raise ValueError(f"Unsupported model provider: {self.provider}")
     
     async def generate(self, messages: List[Dict[str, Any]], system: Optional[str] = None) -> str:
         """
@@ -68,7 +83,7 @@ class ModelClient:
             logger.error(f"Error generating response: {str(e)}", exc_info=True)
             raise
     
-    async def stream(self, messages: List[Dict[str, Any]], system: Optional[str] = None) -> AsyncGenerator[str, None]:
+    async def stream(self, messages: List[Dict[str, Any]], system: Optional[str] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream a response from the model.
         
@@ -77,9 +92,10 @@ class ModelClient:
             system: Optional system message to set context
             
         Yields:
-            str: Generated text chunks
+            Dict[str, Any]: Generated content blocks with type and text
         """
         try:
+            logger.info(f"ModelClient.stream called with messages: {messages}, system: {system}")
             if self.provider == "anthropic":
                 # Convert messages to Anthropic format
                 formatted_messages = []
@@ -88,14 +104,15 @@ class ModelClient:
                         "role": "system",
                         "content": system
                     })
-                
                 for msg in messages:
                     role = "assistant" if msg["role"] == "assistant" else "user"
                     formatted_messages.append({
                         "role": role,
                         "content": msg["content"]
                     })
+                logger.info(f"Formatted messages for provider: {formatted_messages}")
                 
+                # Create streaming response
                 stream = await self.client.messages.create(
                     model=self.model,
                     messages=formatted_messages,
@@ -104,10 +121,19 @@ class ModelClient:
                     stream=True
                 )
                 
-                async for chunk in stream:
-                    if chunk.content:
-                        yield chunk.content[0].text
-            
+                # Yield content blocks
+                async for event in stream:
+                    if hasattr(event, "type") and event.type == "content_block":
+                        if hasattr(event.delta, "text"):
+                            yield {
+                                "type": "text",
+                                "text": event.delta.text
+                            }
+                    elif hasattr(event, "delta") and hasattr(event.delta, "text"):
+                        yield {
+                            "type": "text",
+                            "text": event.delta.text
+                        }
             else:
                 raise ValueError(f"Unsupported model provider: {self.provider}")
         except Exception as e:

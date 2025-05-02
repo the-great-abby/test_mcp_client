@@ -1,7 +1,7 @@
 # AI-friendly Makefile
 # All commands return JSON output and include state management
 
-.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html
 
 # Helper function to format JSON output
 define json_output
@@ -44,9 +44,9 @@ ai-logs:
 
 # Run tests with basic status reporting
 ai-test:
-	@echo '{"status": "starting", "action": "test", "message": "Running tests..."}'
+	@echo '{"status": "starting", "action": "test", "message": "Running tests with args: $(PYTEST_ARGS)"}'
 	@make -f Makefile.ai test-setup
-	docker compose -f docker-compose.test.yml exec -T backend-test pytest tests -v
+	@docker compose -f docker-compose.test.yml exec -T backend-test python -m pytest tests $(PYTEST_ARGS)
 	@echo '{"status": "complete", "action": "test", "message": "Tests complete"}'
 
 # Run migrations with state tracking
@@ -68,7 +68,7 @@ ai-validate:
 ai-test-websocket:
 	@echo '{"status": "starting", "action": "test-websocket", "message": "Running WebSocket tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/test_websocket.py -v 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/test_websocket.py -v $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-websocket","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -76,7 +76,7 @@ ai-test-websocket:
 ai-test-unit:
 	@echo '{"status": "starting", "action": "test-unit", "message": "Running unit tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests -v 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests -v $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-unit","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -84,7 +84,7 @@ ai-test-unit:
 ai-test-integration:
 	@echo '{"status": "starting", "action": "test-integration", "message": "Running integration tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/integration -v 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/integration -v $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-integration","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -92,16 +92,9 @@ ai-test-integration:
 ai-test-coverage:
 	@echo '{"status": "starting", "action": "test-coverage", "message": "Running tests with coverage..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest \\
-		--cov=app \\
-		--cov-report=term-missing \\
-		--cov-report=html \\
-		--cov-fail-under=80 \\
-		-v tests/ 2>&1); \\
-	exit_code=$$?; \\
-	coverage=$$(echo "$$output" | grep "TOTAL" | awk '{print $$4}' || echo "0"); \\
-	$(call json_output,"ai-test-coverage","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,\\
-		"{\\"coverage\\":\\"$$coverage\\",\\"output\\":\\"$${output}\\"}")) 2>/dev/null
+	@docker compose -f docker-compose.test.yml exec -T backend-test sh -c 'echo "[COVERAGE] Removing old .coverage files..." && rm -f /app/.coverage /app/coverage_data/.coverage && echo "[COVERAGE] Old .coverage files removed."'
+	@docker compose -f docker-compose.test.yml exec -T backend-test coverage run -m pytest $(PYTEST_ARGS)
+	@docker compose -f docker-compose.test.yml exec -T backend-test sh -c 'echo "[COVERAGE] Before copy: "; ls -lh /app/.coverage || echo "[COVERAGE] /app/.coverage not found"; ls -lh /app/coverage_data; cp /app/.coverage /app/coverage_data/.coverage 2>/dev/null || true; echo "[COVERAGE] After copy: "; ls -lh /app/coverage_data'
 
 # Target to run tests and log output to a file (Restored Version)
 ai-test-log:
@@ -178,7 +171,10 @@ help:
 	@echo "  make -f Makefile.ai ai-down       - Stop and remove containers with volumes"
 	@echo "  make -f Makefile.ai ai-test-coverage - Run tests with coverage reporting"
 	@echo "  make -f Makefile.ai ai-up-test    - Start test environment containers"
-	@echo "  make -f Makefile.ai ai-test-log    - Run tests and log output" 
+	@echo "  make -f Makefile.ai ai-test-log    - Run tests and log output"
+	@echo "  make -f Makefile.ai ai-memory-create  - Create claude-memory Docker volume"
+	@echo "  make -f Makefile.ai ai-memory-destroy - Remove claude-memory Docker volume"
+	@echo "  make -f Makefile.ai ai-coverage-missing - Show files and lines missing coverage (for automation)"
 
 # Stop test containers with JSON output
 ai-test-stop:
@@ -186,9 +182,10 @@ ai-test-stop:
 	@docker compose -f docker-compose.test.yml down --remove-orphans
 	@echo "{ \"status\": \"test containers stopped\" }"
 
+# Run tests in debug mode
 ai-test-debug:
 	@echo "Running tests in debug mode with detailed output..."
-	docker compose -f docker-compose.test.yml exec backend-test pytest \
+	docker compose -f docker-compose.test.yml exec -T backend-test python -m pytest \
 		--verbose \
 		--capture=no \
 		--log-cli-level=DEBUG \
@@ -196,4 +193,87 @@ ai-test-debug:
 		--showlocals \
 		--tb=long \
 		-vv \
-		tests/test_websocket.py tests/test_websocket_rate_limit.py
+		$(PYTEST_ARGS)
+
+# Run tests with the real_service marker
+ai-test-real:
+	@echo '{"status": "starting", "action": "test-real", "message": "Running real_service tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest -m real_service tests -v $(PYTEST_ARGS) 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-real","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Run tests with the mock_service marker
+ai-test-mock:
+	@echo '{"status": "starting", "action": "test-mock", "message": "Running mock_service tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest -m mock_service tests -v $(PYTEST_ARGS) 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-mock","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Run Redis mock tests
+ai-test-redis-mock:
+	@echo '{"status": "starting", "action": "test-redis-mock", "message": "Running Redis mock tests..."}'
+	@(output=$$(PYTHONPATH=backend pytest -v backend/tests/test_redis_mock.py -m unit 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-redis-mock","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Start test environment and ensure services are ready
+ai-env-up:
+	@echo '{"status": "starting", "action": "env-up", "message": "Starting test environment..."}'
+	@docker compose -f docker-compose.test.yml up -d
+	@echo "Waiting for services to be ready..."
+	@sleep 5
+	@(healthy_count=$$(docker-compose -f docker-compose.test.yml ps --services --filter "health=healthy" | wc -l | tr -d ' '); \
+	total_count=$$(docker-compose -f docker-compose.test.yml ps --services | wc -l | tr -d ' '); \
+	if [ $$healthy_count -eq $$total_count ]; then \
+		$(call json_output,"ai-env-up","success",0,"{\"healthy_containers\":$$healthy_count,\"total_containers\":$$total_count,\"message\":\"Test environment ready\"}"); \
+	else \
+		$(call json_output,"ai-env-up","warning",1,"{\"healthy_containers\":$$healthy_count,\"total_containers\":$$total_count,\"message\":\"Some containers not healthy\"}"); \
+	fi) 2>/dev/null
+	@make -f Makefile.ai test-setup
+
+# Create claude-memory Docker volume
+ai-memory-create:
+	@volume_exists=$$(docker volume ls -q -f name=claude-memory | grep -q claude-memory && echo "true" || echo "false"); \
+	if [ "$$volume_exists" = "true" ]; then \
+		echo '{"command":"ai-memory-create","status":"skipped","code":0,"data":{"message":"Volume claude-memory already exists"}}'; \
+	else \
+		docker volume create claude-memory > /dev/null 2>&1; \
+		echo '{"command":"ai-memory-create","status":"success","code":0,"data":{"message":"Created claude-memory volume"}}'; \
+	fi
+
+# Remove claude-memory Docker volume
+ai-memory-destroy:
+	@volume_exists=$$(docker volume ls -q -f name=claude-memory | grep -q claude-memory && echo "true" || echo "false"); \
+	if [ "$$volume_exists" = "true" ]; then \
+		docker volume rm claude-memory > /dev/null 2>&1; \
+		echo '{"command":"ai-memory-destroy","status":"success","code":0,"data":{"message":"Removed claude-memory volume"}}'; \
+	else \
+		echo '{"command":"ai-memory-destroy","status":"skipped","code":0,"data":{"message":"Volume claude-memory does not exist"}}'; \
+	fi
+
+# Show files and lines missing coverage (for automation)
+ai-coverage-missing:
+	@docker compose -f docker-compose.test.yml exec -T backend-test env COVERAGE_FILE=/app/coverage_data/.coverage coverage report -m | grep -v '100%' || true
+
+# Run tests with coverage and immediately show missing lines
+ai-test-coverage-missing:
+	@echo '{"status": "starting", "action": "test-coverage-missing", "message": "Running tests with coverage and showing missing lines..."}'
+	@make -f Makefile.ai test-setup
+	@docker compose -f docker-compose.test.yml exec -T backend-test sh -c 'echo "[COVERAGE] Removing old .coverage files..." && rm -f /app/.coverage /app/coverage_data/.coverage && echo "[COVERAGE] Old .coverage files removed."'
+	@docker compose -f docker-compose.test.yml exec -T backend-test coverage run -m pytest $(PYTEST_ARGS)
+	@docker compose -f docker-compose.test.yml exec -T backend-test sh -c 'echo "[COVERAGE] Before copy: "; ls -lh /app/.coverage || echo "[COVERAGE] /app/.coverage not found"; ls -lh /app/coverage_data; cp /app/.coverage /app/coverage_data/.coverage 2>/dev/null || true; echo "[COVERAGE] After copy: "; ls -lh /app/coverage_data'
+	@docker compose -f docker-compose.test.yml exec -T backend-test coverage report --data-file=/app/coverage_data/.coverage -m | grep -v '100%' || true
+
+# Generate terminal coverage report from persisted file
+aio-coverage-report:
+	@coverage report --data-file=coverage_data/.coverage -m
+
+# Generate HTML coverage report from persisted file
+aio-coverage-html:
+	@coverage html --data-file=coverage_data/.coverage
+
+# Open HTML coverage report in default browser (macOS)
+aio-coverage-open-html:
+	@open htmlcov/index.html

@@ -1,7 +1,9 @@
+"""Connection state enum."""
 from enum import Enum
 
-class ConnectionState(str, Enum):
-    """Enum representing the possible states of a WebSocket connection."""
+class ConnectionState(Enum):
+    """Connection state enum."""
     CONNECTED = "connected"
     DISCONNECTED = "disconnected"
-    RECONNECTING = "reconnecting" 
+    RECONNECTING = "reconnecting"
+    STREAMING = "streaming" 

@@ -1,0 +1,82 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# AI-Optimized Makefile Targets
+
+- **Preferred Test Commands**
+  ```bash
+  # ✅ DO: Use AI-optimized targets
+  make -f Makefile.ai ai-test
+  make -f Makefile.ai ai-test-unit
+  make -f Makefile.ai ai-test-integration
+  
+  # ❌ DON'T: Use standard targets directly
+  make test
+  make test-unit
+  make test-integration
+  ```
+
+- **Environment Management**
+  ```bash
+  # ✅ DO: Use AI environment controls
+  make -f Makefile.ai ai-env-up    # Start test environment
+  make -f Makefile.ai ai-env-down  # Clean up environment
+  make -f Makefile.ai ai-restart   # Restart environment
+  
+  # ❌ DON'T: Use docker-compose directly
+  docker-compose up
+  docker-compose down
+  ```
+
+- **Test Execution Features**
+  - **Smart Test Selection**
+    - Automatically detects changed files
+    - Runs relevant test suites
+    - Optimizes test order based on history
+  
+  - **Enhanced Logging**
+    - Detailed test execution logs
+    - Performance metrics
+    - Coverage analysis
+  
+  - **Failure Analysis**
+    - Automatic retry of flaky tests
+    - Detailed error reporting
+    - Suggestions for fixes
+
+- **Running Specific Tests**
+  ```bash
+  # ✅ DO: Use AI test runner with specific tests
+  make -f Makefile.ai ai-test PYTEST_ARGS="tests/async/test_websocket.py::test_rate_limiting"
+  
+  # For debugging with extra verbosity
+  make -f Makefile.ai ai-test-debug PYTEST_ARGS="tests/async/test_websocket.py::test_rate_limiting"
+  ```
+
+- **Coverage Requirements**
+  - AI targets enforce minimum coverage thresholds
+  - Provides detailed coverage reports
+  - Suggests areas needing more tests
+
+- **Best Practices**
+  - ✅ DO: Use `ai-` prefixed targets for all test operations
+  - ✅ DO: Let AI handle test environment setup/teardown
+  - ✅ DO: Use AI-enhanced logging for debugging
+  - ❌ DON'T: Mix AI and non-AI targets in the same session
+  - ❌ DON'T: Skip the AI environment validation steps
+
+- **Common Issues**
+  - **Environment Conflicts**
+    - Symptom: Test environment not ready
+    - Solution: Use `ai-env-reset` to clean state
+  
+  - **Test Selection Issues**
+    - Symptom: Wrong tests being run
+    - Solution: Use `ai-test-verify` to check selection
+
+- **References**
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) for test execution details
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc) for environment setup
+  - [docker.mdc](mdc:.cursor/rules/docker.mdc) for container configuration

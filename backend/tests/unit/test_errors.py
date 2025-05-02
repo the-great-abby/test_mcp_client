@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, ValidationError as PydanticValidationError
 import json
-from typing import Optional
+from typing import Optional, Dict, Any
 from fastapi import status
 
 from app.core.errors import (
@@ -44,6 +44,7 @@ def mock_request():
 
 # --- Direct Handler Tests ---
 
+@pytest.mark.mock_service
 @pytest.mark.asyncio
 async def test_app_error_handler_direct(mock_request): 
     """Test that AppError is handled correctly by calling the handler directly."""
@@ -55,30 +56,39 @@ async def test_app_error_handler_direct(mock_request):
     assert data["error"] == "Test error message"
     assert data["code"] == "test_error"
 
+@pytest.mark.mock_service
 @pytest.mark.asyncio
 async def test_not_found_handler_direct(mock_request): 
     """Test that NotFoundError is handled correctly by calling the handler directly."""
-    exc = NotFoundError(message="Resource not found") # Code defaults to resource_not_found
-    response = await app_error_handler(mock_request, exc) # Use app_error_handler
+    exc = NotFoundError(
+        message="Resource not found",
+        code="resource_not_found",
+        status_code=404
+    )
+    response = await app_error_handler(mock_request, exc)
     assert isinstance(response, JSONResponse)
     assert response.status_code == 404
     data = json.loads(response.body.decode())
     assert data["error"] == "Resource not found"
     assert data["code"] == "resource_not_found"
 
+@pytest.mark.mock_service
 @pytest.mark.asyncio
 async def test_validation_error_handler_direct(mock_request): 
     """Test the validation error handler by calling it directly."""
+    errors: Dict[str, Any] = {
+        "field": {
+            "msg": "Invalid value",
+            "type": "validation_error",
+            "input": "invalid",
+            "ctx": {}
+        }
+    }
     exc = ValidationError(
         message="Invalid data",
-        errors={
-            "field": {
-                "msg": "Invalid value",
-                "type": "validation_error",
-                "input": "invalid",
-                "ctx": {} # Ensure ctx is included if handler expects it
-            }
-        }
+        code="validation_error",
+        status_code=422,
+        errors=errors
     )
     response = await validation_error_handler(mock_request, exc)
     assert isinstance(response, JSONResponse)
@@ -93,8 +103,9 @@ async def test_validation_error_handler_direct(mock_request):
     assert error["msg"] == "Invalid value"
     assert error["type"] == "validation_error"
     assert error["input"] == "invalid"
-    assert "ctx" in error # Verify ctx is present if needed
+    assert "ctx" in error
 
+@pytest.mark.mock_service
 @pytest.mark.asyncio
 async def test_generic_error_handler_direct(mock_request): 
     """Test that generic errors are handled correctly by calling the handler directly."""
@@ -103,7 +114,6 @@ async def test_generic_error_handler_direct(mock_request):
     assert isinstance(response, JSONResponse)
     assert response.status_code == 500
     data = json.loads(response.body.decode())
-    # Assuming settings.DEBUG is False by default in test environment
     assert data["error"] == "Internal server error" 
     assert data["code"] == "internal_server_error"
 
@@ -113,7 +123,6 @@ async def test_generic_error_handler_direct(mock_request):
 def pydantic_test_app():
     """Minimal app fixture ONLY for the Pydantic validation test."""
     app = FastAPI()
-    # Only register the pydantic handler for this specific test
     app.add_exception_handler(RequestValidationError, pydantic_validation_error_handler)
     class TestModel(BaseModel):
         name: str = Field(..., min_length=3)
@@ -128,7 +137,8 @@ def pydantic_test_client(pydantic_test_app):
     """Client fixture ONLY for the Pydantic validation test."""
     return TestClient(pydantic_test_app, raise_server_exceptions=False)
 
-def test_pydantic_validation_error(pydantic_test_client): # Use specific client
+@pytest.mark.mock_service
+def test_pydantic_validation_error(pydantic_test_client): 
     """Test Pydantic validation error through the API."""
     # Test missing required field
     response = pydantic_test_client.post("/test/pydantic-validation", json={})
@@ -152,11 +162,9 @@ def test_pydantic_validation_error(pydantic_test_client): # Use specific client
     errors_by_field = {}
     for err in data["errors"]:
         if err["loc"]:
-            # Use last part of loc tuple as field name (e.g., 'name' from ('body', 'name'))
             field_name = err["loc"][-1] 
             errors_by_field[field_name] = err
         else:
-            # Handle potential body-level errors (e.g., ('body',))
             errors_by_field["_body"] = err 
 
     assert "name" in errors_by_field, f"'name' not found in error keys: {list(errors_by_field.keys())}"

@@ -3,39 +3,30 @@ description: Guidelines for executing pytest within Docker Compose environment
 globs: backend/tests/**/*.py
 alwaysApply: true
 ---
-
 # Pytest Execution Guidelines
 
 - **Core Requirements**
   - **Execution Environment**
-    - All pytest commands MUST run through Docker Compose
+    - All pytest commands MUST run through Makefile.ai targets
     - Tests MUST execute within the test network
-    - Use Makefile targets for standardization
+    - Use AI-optimized targets for standardization
     ```bash
-    # ✅ Correct: Using Makefile targets
-    make test
-    make test-unit
-    make test-integration
+    # ✅ Correct: Using Makefile.ai targets
+    make -f Makefile.ai ai-test PYTEST_ARGS="-x"
+    make -f Makefile.ai ai-test-unit PYTEST_ARGS="-x"
+    make -f Makefile.ai ai-test-integration PYTEST_ARGS="-x"
     
-    # ❌ Incorrect: Direct pytest execution
+    # ❌ Incorrect: Direct pytest or docker-compose execution
     pytest backend/tests/
     python -m pytest
+    docker compose -f docker-compose.test.yml run --rm backend-test pytest
     ```
 
-- **Makefile Target Structure**
-  - **Required Components**
-    ```makefile
-    # Base test command
-    test:
-        docker compose -f docker-compose.test.yml run --rm backend-test pytest
-
-    # Specific test suites
-    test-unit:
-        docker compose -f docker-compose.test.yml run --rm backend-test pytest backend/tests/unit
-
-    test-integration:
-        docker compose -f docker-compose.test.yml run --rm backend-test pytest backend/tests/integration
-    ```
+- **Required Flags**
+  - **Stop on First Failure (-x)**
+    - All test runs MUST include the `-x` flag
+    - Provides faster feedback on failures
+    - Enables more efficient debugging cycles
 
 - **Network Requirements**
   - **Service Resolution**
@@ -72,15 +63,17 @@ alwaysApply: true
     ```
 
 - **Best Practices**
-  - ✅ DO: Use Makefile targets for all test execution
+  - ✅ DO: Use Makefile.ai targets for all test execution
+  - ✅ DO: Always include the -x flag in PYTEST_ARGS
   - ✅ DO: Run tests in isolated test network
   - ✅ DO: Use Docker service names for connections
   - ✅ DO: Keep test environment isolated
   - ✅ DO: Use internal Docker network ports
   - ❌ DON'T: Run pytest directly on host
+  - ❌ DON'T: Use docker-compose directly
   - ❌ DON'T: Use localhost or external ports
   - ❌ DON'T: Mix test and dev environments
-  - ❌ DON'T: Hardcode connection strings
+  - ❌ DON'T: Skip the -x flag
 
 - **Common Issues**
   - **Connection Failures**
@@ -93,25 +86,31 @@ alwaysApply: true
     - Cause: Using external ports internally
     - Solution: Use internal Docker network ports
 
+  - **Test Execution**
+    - Symptom: Tests continue after failure
+    - Cause: Missing -x flag
+    - Solution: Always include -x in PYTEST_ARGS
+
 - **Testing Flow**
   ```bash
   # ✅ Correct workflow
   1. Start test environment:
-     make test-env-up
+     make -f Makefile.ai ai-env-up
   
   2. Run tests:
-     make test
+     make -f Makefile.ai ai-test PYTEST_ARGS="-x"
   
   3. Clean up:
-     make test-env-down
+     make -f Makefile.ai ai-env-down
   
   # ❌ Incorrect workflow
   1. Running pytest directly
-  2. Using different port mappings
-  3. Mixing environments
+  2. Using docker-compose directly
+  3. Running without -x flag
   ```
 
 - **References**
-  - [docker.mdc](mdc:.cursor/rules/docker.mdc) for container setup
+  - [pytest_flags.mdc](mdc:.cursor/rules/pytest_flags.mdc) for flag requirements
+  - [makefile_ai.mdc](mdc:.cursor/rules/makefile_ai.mdc) for AI-optimized targets
   - [environments.mdc](mdc:.cursor/rules/environments.mdc) for environment configuration
   - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc) for testing patterns 

@@ -1,0 +1,124 @@
+---
+description: Guidelines for organizing and managing test services, mocks, and real implementations
+globs: backend/tests/**/*.py
+alwaysApply: true
+---
+
+# Test Services Organization
+
+- **Overview**
+  - Standardize how we handle real vs mock services in tests
+  - Ensure consistent interface between real and mock implementations
+  - Define clear patterns for service initialization and dependency injection
+  - Maintain test isolation while allowing real service integration tests
+
+- **Service Categories**
+  - **Real Services**
+    ```python
+    # ✅ DO: Use real services in integration tests
+    @pytest.mark.real_service
+    async def test_redis_integration(redis_client):
+        assert await redis_client.set("key", "value")
+        assert await redis_client.get("key") == "value"
+    ```
+
+  - **Mock Services**
+    ```python
+    # ✅ DO: Use mock services in unit tests
+    async def test_redis_mock(mock_redis):
+        assert await mock_redis.set("key", "value")
+        assert await mock_redis.get("key") == "value"
+    ```
+
+- **Interface Requirements**
+  - **Mock Implementation Rules**
+    ```python
+    # ✅ DO: Match real service interface exactly
+    class MockRedis:
+        async def get(self, key: str) -> str | None:
+            return self.store.get(key)
+            
+        async def set(self, key: str, value: str, ex: int | None = None) -> bool:
+            self.store[key] = value
+            if ex:
+                self.expiry[key] = time.time() + ex
+            return True
+    
+    # ❌ DON'T: Add mock-only methods or change signatures
+    class BadMockRedis:
+        def get_without_async(self, key): # Wrong!
+            return self.store.get(key)
+    ```
+
+  - **Service Registration**
+    ```python
+    # ✅ DO: Use fixtures for service injection
+    @pytest.fixture
+    def redis_client():
+        if "real_service" in request.keywords:
+            return RedisClient()
+        return MockRedis()
+    
+    # ❌ DON'T: Create services directly in tests
+    async def test_bad_practice():
+        redis = RedisClient()  # Wrong!
+    ```
+
+- **Test Organization**
+  - **Integration Tests** (`tests/integration/`)
+    - Use `@pytest.mark.real_service`
+    - Connect to actual services (Redis, PostgreSQL)
+    - Test full service interaction
+    - Clean up after each test
+  
+  - **Unit Tests** (`tests/unit/`)
+    - Use mock services by default
+    - Focus on isolated component testing
+    - Fast and independent execution
+
+- **Service Configuration**
+  - **Test Environment**
+    ```env
+    # test.env
+    REDIS_HOST=redis-test
+    REDIS_PORT=6379
+    ENVIRONMENT=test
+    ```
+  
+  - **Docker Services**
+    ```yaml
+    # docker-compose.test.yml
+    services:
+      redis-test:
+        image: redis:7
+        ports:
+          - "6380:6379"
+      db-test:
+        image: postgres:15
+        ports:
+          - "5433:5432"
+    ```
+
+- **Best Practices**
+  - ✅ DO: Use fixtures for service management
+  - ✅ DO: Match real service interfaces exactly
+  - ✅ DO: Clean up between tests
+  - ✅ DO: Use proper service names in test network
+  - ✅ DO: Document mock limitations
+  - ❌ DON'T: Mix mock and real services in same test
+  - ❌ DON'T: Use localhost for service connections
+  - ❌ DON'T: Skip cleanup in teardown
+  - ❌ DON'T: Add mock-specific features
+
+- **Common Pitfalls**
+  - Using wrong service names in test environment
+  - Mixing mock and real services unintentionally
+  - Incomplete mock implementations
+  - Missing cleanup between tests
+  - Hardcoded connection strings
+
+- **References**
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) for test execution guidelines
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc) for environment configuration
+  - [docker.mdc](mdc:.cursor/rules/docker.mdc) for container setup
+  - [testing.mdc](mdc:.cursor/rules/testing.mdc) for general testing patterns 

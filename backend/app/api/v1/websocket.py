@@ -8,143 +8,144 @@ from uuid import uuid4
 from datetime import datetime, UTC
 import logging
 import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings, Settings, get_settings
+from app.core.auth import verify_token, get_current_user_from_token
+from jose import jwt, JWTError
+from app.utils import get_client_ip
+import os
 
-from app.core.config import settings, Settings
-from app.core.auth import verify_token
-from app.api.deps import get_settings, get_websocket_manager_ws
-from app.core.websocket import ChatMessage, WebSocketManager
-from app.core.errors import RateLimitExceeded, ConnectionLimitExceeded
+from app.core.websocket import WebSocketManager, ChatMessage
+from app.models import User
+from app.core.redis import get_redis, RedisClient
+from app.core.websocket_rate_limiter import WebSocketRateLimiter
+from app.core.errors import WebSocketError, AuthenticationError, RateLimitExceeded
+from app.db.session import get_db
+from websockets.exceptions import ConnectionClosed
+from websockets.frames import Close
 
 # Create router with prefix and tags
 router = APIRouter(
-    prefix=f"{settings.API_V1_STR}",
     tags=["websocket"]
 )
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+# Create a WebSocket manager instance for this endpoint
+manager = None
+rate_limiter = None
+
+async def get_manager(redis: RedisClient = Depends(get_redis)) -> WebSocketManager:
+    """Get or create WebSocket manager instance."""
+    global manager
+    if manager is None:
+        manager = WebSocketManager(redis)
+    return manager
+
+async def get_rate_limiter(redis: RedisClient = Depends(get_redis)) -> WebSocketRateLimiter:
+    """Get or create rate limiter instance."""
+    global rate_limiter
+    if rate_limiter is None:
+        rate_limiter = WebSocketRateLimiter(redis)
+    return rate_limiter
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: Optional[str] = None,
-    settings: Settings = Depends(get_settings),
-    websocket_manager: WebSocketManager = Depends(get_websocket_manager_ws),
+    websocket_manager: WebSocketManager = Depends(get_manager),
+    rate_limiter: WebSocketRateLimiter = Depends(get_rate_limiter),
+    db: AsyncSession = Depends(get_db)
 ):
-    """WebSocket endpoint for real-time communication."""
-    try:
-        await websocket.accept()
-        
-        # Handle authentication
-        user_id = None
-        if token:
-            try:
-                payload = await verify_token(token=token)
-                user_id = payload.sub
-                logger.debug(f"Authenticated WebSocket connection for user {user_id}")
-            except HTTPException as e:
-                logger.warning(f"Token verification failed: {str(e)}")
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-                return
-        
-        # Add connection to manager
-        try:
-            client_id = str(uuid4())
-            connected = await websocket_manager.connect(client_id, websocket, user_id)
-            if not connected:
-                logger.warning(f"Connection limit exceeded for user {user_id}")
-                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-                return
-        except (RateLimitExceeded, ConnectionLimitExceeded) as e:
-            logger.warning(f"Connection limit exceeded for user {user_id}: {str(e)}")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
+    """WebSocket endpoint for real-time communication.
 
+    Args:
+        websocket: WebSocket connection
+        websocket_manager: WebSocket manager instance
+        rate_limiter: Rate limiter instance
+    """
+    client_id = None
+    try:
+        # Get auth token from query parameters
+        token = websocket.query_params.get("token")
+        if not token:
+            raise ConnectionClosed(
+                rcvd=Close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing token"),
+                sent=None
+            )
+
+        # Validate token and get user
+        try:
+            user = await get_current_user_from_token(token, db)
+            if not user:
+                raise ConnectionClosed(
+                    rcvd=Close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"),
+                    sent=None
+                )
+        except Exception as e:
+            logger.error(f"Token validation error: {e}")
+            raise ConnectionClosed(
+                rcvd=Close(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token"),
+                sent=None
+            )
+
+        # Get client ID from query parameters
+        client_id = websocket.query_params.get("client_id")
+        if not client_id:
+            raise ConnectionClosed(
+                rcvd=Close(code=status.WS_1008_POLICY_VIOLATION, reason="Missing client_id"),
+                sent=None
+            )
+
+        # Accept connection
+        await websocket.accept()
+
+        # Connect to WebSocket manager
+        success = await websocket_manager.connect(
+            client_id=client_id,
+            websocket=websocket,
+            user_id=str(user.id)
+        )
+
+        if not success:
+            raise ConnectionClosed(
+                rcvd=Close(code=status.WS_1011_INTERNAL_ERROR, reason="Connection failed"),
+                sent=None
+            )
+
+        # Handle messages
         try:
             while True:
-                data = await websocket.receive_text()
-                try:
-                    msg_dict = json.loads(data)
-                    logger.debug(f"Received message: {msg_dict}")
-                    # Ensure required fields for ChatMessage
-                    if "type" not in msg_dict:
-                        logger.error(f"Incoming message missing 'type': {msg_dict}")
-                        continue
-                    if "content" not in msg_dict:
-                        msg_dict["content"] = ""
-                    # Handle ping/pong
-                    if msg_dict["type"] == "ping":
-                        pong = {"type": "pong", "content": msg_dict.get("content", ""), "metadata": msg_dict.get("metadata", {})}
-                        await websocket.send_text(json.dumps(pong))
-                        continue
-                    # Broadcast supported types
-                    if msg_dict["type"] == "typing_indicator":
-                        # Add user_id to metadata if available
-                        if user_id:
-                            msg_dict.setdefault("metadata", {})["user_id"] = user_id
-                        if client_id:
-                            msg_dict.setdefault("metadata", {})["client_id"] = client_id
-                        message = ChatMessage.from_dict(msg_dict)
-                        await websocket_manager.broadcast(message)
-                        continue
-                    elif msg_dict["type"] == "system":
-                        # Echo system message back to sender
-                        await websocket_manager.send_message(
-                            client_id,
-                            ChatMessage(
-                                type="system",
-                                content=msg_dict.get("content", ""),
-                                metadata=msg_dict.get("metadata", {})
-                            )
-                        )
-                        continue
-                    elif msg_dict["type"] in ("message", "chat", "chat_message"):
-                        content = msg_dict["content"].strip()
-                        if not content:
-                            await websocket_manager.send_message(
-                                client_id,
-                                ChatMessage(
-                                    type="error",
-                                    content="Invalid message format: missing or empty content",
-                                    metadata={"error_type": "validation"}
-                                )
-                            )
-                            logger.debug("Error message sent to client")
-                            continue
-                        # Always use 'chat_message' as the outgoing type
-                        message = ChatMessage(
-                            type="chat_message",
-                            content=content,
-                            metadata={
-                                "client_id": client_id,
-                                "user_id": user_id,
-                                "timestamp": msg_dict.get("metadata", {}).get("timestamp")
-                            }
-                        )
-                        await websocket_manager.send_message(client_id, message)
-                        await websocket_manager.broadcast(message, exclude={client_id})
-                except Exception as e:
-                    logger.error(f"Failed to parse incoming message: {data} | Error: {e}")
-                    continue
-        except WebSocketDisconnect:
-            logger.info(f"WebSocket disconnected for user {user_id}")
+                message = await websocket.receive_json()
+                await websocket_manager.handle_message(client_id, message)
+        except ConnectionClosed:
+            logger.info(f"Client {client_id} disconnected")
             await websocket_manager.disconnect(client_id)
-            
+        except Exception as e:
+            logger.error(f"Error handling message from {client_id}: {e}")
+            await websocket_manager.disconnect(client_id)
+            raise ConnectionClosed(
+                rcvd=Close(code=status.WS_1011_INTERNAL_ERROR, reason=str(e)),
+                sent=None
+            )
+
+    except ConnectionClosed as e:
+        logger.warning(f"WebSocket connection closed: {e}")
+        if client_id:
+            await websocket_manager.disconnect(client_id)
+        if not e.sent:
+            await websocket.close(code=e.rcvd.code, reason=e.rcvd.reason)
+
     except Exception as e:
-        logger.error(f"WebSocket error: {str(e)}")
-        if not websocket.client_state.DISCONNECTED:
-            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+        logger.error(f"WebSocket error: {e}")
+        if client_id:
+            await websocket_manager.disconnect(client_id)
+        await websocket.close(code=status.WS_1011_INTERNAL_ERROR, reason=str(e))
 
 @router.get("/ws/status")
-async def get_websocket_status(
-    websocket_manager: WebSocketManager = Depends(get_websocket_manager_ws)
-) -> Dict[str, Any]:
-    """Get status of WebSocket connections."""
-    active_connections = {
-        client_id: metadata.to_dict()
-        for client_id, metadata in websocket_manager.connection_metadata.items()
-    }
+async def websocket_status(manager: WebSocketManager = Depends(get_manager)):
+    """Get WebSocket connection status."""
     return {
-        "active_connections": active_connections,
-        "total_messages": len(websocket_manager.message_history)
+        "active_connections": len(manager.active_connections),
+        "message_history_length": len(manager.message_history)
     }
