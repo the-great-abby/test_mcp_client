@@ -14,6 +14,7 @@ from contextlib import AsyncExitStack
 from fastapi import status
 from starlette.websockets import WebSocketState
 from websockets.frames import Close
+import time
 
 from app.core.websocket import WebSocketManager
 from app.core.websocket_rate_limiter import WebSocketRateLimiter
@@ -37,7 +38,8 @@ CONNECT_TIMEOUT = 5.0
 MESSAGE_TIMEOUT = 5.0
 
 @pytest.mark.integration
-@pytest.mark.real_service
+@pytest.mark.real_redis
+@pytest.mark.db_test  # TODO: Remove if no DB interaction occurs in these tests
 class TestWebSocketRedisIntegration:
     """Integration tests for WebSocket Redis functionality."""
     
@@ -91,15 +93,33 @@ class TestWebSocketRedisIntegration:
         
         # Create connection
         ws = await ws_helper.connect(client_id=client_id)
-        assert ws.client_state == WebSocketState.CONNECTED
+        assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
         
         # Verify Redis tracking
         count = await ws_helper.rate_limiter.get_connection_count(TEST_USER_ID)
         assert count == 1, "Redis should track one connection"
         
         # Disconnect
+        logger.debug(f"[TEST] ws id={id(ws)} active_connections id={id(ws_helper.active_connections.get(client_id)) if client_id in ws_helper.active_connections else None}")
         await ws_helper.disconnect(client_id)
-        assert ws_helper.get_connection_state(client_id) == WebSocketState.DISCONNECTED
+        await asyncio.sleep(0.1)  # Ensure all async state changes propagate
+        logger.debug(f"[TEST] After disconnect: ws id={id(ws)} active_connections id={id(ws_helper.active_connections.get(client_id)) if client_id in ws_helper.active_connections else None}")
+        # Poll for state to become DISCONNECTED
+        start = time.monotonic()
+        while True:
+            state = ws_helper.get_connection_state(client_id)
+            logger.debug(f"[TEST] Polling for DISCONNECTED: state={state}")
+            if state == WebSocketState.DISCONNECTED:
+                break
+            if time.monotonic() - start > 2.0:
+                break
+            await asyncio.sleep(0.05)
+        # Print and log all active connection ids and their states before assertion
+        print("[TEST] Active connections before assertion:")
+        ws_helper.debug_active_connections()
+        logger.debug("[TEST] Active connections before assertion:")
+        # Only assert after polling
+        assert ws_helper.get_connection_state(client_id) == WebSocketState.DISCONNECTED, f"WebSocket should reach DISCONNECTED state, got {state}"
         
         # Verify Redis cleanup
         count = await ws_helper.rate_limiter.get_connection_count(TEST_USER_ID)
@@ -111,7 +131,7 @@ class TestWebSocketRedisIntegration:
         
         # Create connection
         ws = await ws_helper.connect(client_id=client_id)
-        assert ws.client_state == WebSocketState.CONNECTED
+        assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
         
         # Send messages
         for i in range(MESSAGES_PER_MINUTE // 2):
@@ -121,9 +141,19 @@ class TestWebSocketRedisIntegration:
                 ignore_errors=True
             )
             assert response["type"] != "error", f"Message {i} should succeed"
-            
+            # Debug: print message count and keys after each message
+            count = await ws_helper.rate_limiter.get_user_message_count(TEST_USER_ID)
+            print(f"[DEBUG][test] After message {i}: user_message_count={count}")
+            if ws_helper.rate_limiter.redis:
+                keys = await ws_helper.rate_limiter.redis.keys(f"ws:msg:{TEST_USER_ID}:*:*:minute")
+                print(f"[DEBUG][test] Redis keys after message {i}: {keys}")
+        
         # Verify Redis message count
-        count = await ws_helper.rate_limiter.get_message_count(TEST_USER_ID)
+        count = await ws_helper.rate_limiter.get_user_message_count(TEST_USER_ID)
+        print(f"[DEBUG][test] Final user_message_count={count}")
+        if ws_helper.rate_limiter.redis:
+            keys = await ws_helper.rate_limiter.redis.keys(f"ws:msg:{TEST_USER_ID}:*:*:minute")
+            print(f"[DEBUG][test] Final Redis keys: {keys}")
         assert count == MESSAGES_PER_MINUTE // 2, "Redis should track message count"
         
     async def test_redis_rate_limit_persistence(self, ws_helper: WebSocketTestHelper):
@@ -132,7 +162,7 @@ class TestWebSocketRedisIntegration:
         
         # Create connection
         ws = await ws_helper.connect(client_id=client_id)
-        assert ws.client_state == WebSocketState.CONNECTED
+        assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
         
         # Send messages up to limit
         for i in range(MESSAGES_PER_MINUTE):
@@ -172,7 +202,7 @@ class TestWebSocketRedisIntegration:
             for i in range(MAX_CONNECTIONS):
                 client_id = f"test_client_{i}"
                 ws = await ws_helper.connect(client_id=client_id)
-                assert ws.client_state == WebSocketState.CONNECTED
+                assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
                 client_ids.append(client_id)
                 
             # Verify Redis tracking
@@ -181,8 +211,24 @@ class TestWebSocketRedisIntegration:
             
             # Simulate connection error
             for client_id in client_ids[:2]:
+                logger.debug(f"[TEST] Before disconnect: state={ws_helper.get_connection_state(client_id)}")
                 await ws_helper.disconnect(client_id)
-                assert ws_helper.get_connection_state(client_id) == WebSocketState.DISCONNECTED
+                logger.debug(f"[TEST] After disconnect: state={ws_helper.get_connection_state(client_id)}")
+                # Poll for state to become DISCONNECTED
+                start = time.monotonic()
+                while True:
+                    state = ws_helper.get_connection_state(client_id)
+                    ws_obj = ws_helper.active_connections.get(client_id)
+                    logger.debug(f"[TEST] Polling for DISCONNECTED: state={state} ws id={id(ws)} checked_obj id={id(ws_obj) if ws_obj else None} checked_obj state={getattr(ws_obj, 'client_state', None) if ws_obj else None} active_connections={list(ws_helper.active_connections.keys())}")
+                    if state == WebSocketState.DISCONNECTED:
+                        break
+                    if time.monotonic() - start > 2.0:
+                        break
+                    await asyncio.sleep(0.05)
+                ws_helper.debug_active_connections()
+                disconnected = state == WebSocketState.DISCONNECTED
+                logger.debug(f"[TEST] After polling: state={state} ws id={id(ws)} active_connections id={id(ws_helper.active_connections.get(client_id)) if client_id in ws_helper.active_connections else None}")
+                assert disconnected, f"WebSocket should reach DISCONNECTED state, got {state}"
                 
             # Verify Redis cleanup
             count = await ws_helper.rate_limiter.get_connection_count(TEST_USER_ID)
@@ -192,14 +238,31 @@ class TestWebSocketRedisIntegration:
             for i in range(2):
                 client_id = f"new_client_{i}"
                 ws = await ws_helper.connect(client_id=client_id)
-                assert ws.client_state == WebSocketState.CONNECTED
+                assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
                 client_ids.append(client_id)
                 
         finally:
             # Cleanup all connections
             for client_id in client_ids:
                 try:
+                    logger.debug(f"[TEST] Before disconnect: state={ws_helper.get_connection_state(client_id)}")
                     await ws_helper.disconnect(client_id)
+                    logger.debug(f"[TEST] After disconnect: state={ws_helper.get_connection_state(client_id)}")
+                    # Poll for state to become DISCONNECTED
+                    start = time.monotonic()
+                    while True:
+                        state = ws_helper.get_connection_state(client_id)
+                        ws_obj = ws_helper.active_connections.get(client_id)
+                        logger.debug(f"[TEST] Polling for DISCONNECTED: state={state} ws id={id(ws)} checked_obj id={id(ws_obj) if ws_obj else None} checked_obj state={getattr(ws_obj, 'client_state', None) if ws_obj else None} active_connections={list(ws_helper.active_connections.keys())}")
+                        if state == WebSocketState.DISCONNECTED:
+                            break
+                        if time.monotonic() - start > 2.0:
+                            break
+                        await asyncio.sleep(0.05)
+                    ws_helper.debug_active_connections()
+                    disconnected = state == WebSocketState.DISCONNECTED
+                    logger.debug(f"[TEST] After polling: state={state} ws id={id(ws)} active_connections id={id(ws_helper.active_connections.get(client_id)) if client_id in ws_helper.active_connections else None}")
+                    assert disconnected, f"WebSocket should reach DISCONNECTED state, got {state}"
                 except Exception as e:
                     logger.error(f"Error cleaning up connection {client_id}: {e}")
                     
@@ -209,7 +272,7 @@ class TestWebSocketRedisIntegration:
         
         # Create connection
         ws = await ws_helper.connect(client_id=client_id)
-        assert ws.client_state == WebSocketState.CONNECTED
+        assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
         
         try:
             # Simulate Redis error by closing connection
@@ -245,7 +308,7 @@ class TestWebSocketRedisIntegration:
             try:
                 # Connect
                 ws = await ws_helper.connect(client_id=client_id)
-                assert ws.client_state == WebSocketState.CONNECTED
+                assert ws_helper.get_connection_state(client_id) == WebSocketState.CONNECTED
                 
                 # Send messages
                 for i in range(3):  # Reduced count to avoid rate limits
@@ -261,7 +324,21 @@ class TestWebSocketRedisIntegration:
                 
             finally:
                 await ws_helper.disconnect(client_id)
-                assert ws_helper.get_connection_state(client_id) == WebSocketState.DISCONNECTED
+                # Poll for state to become DISCONNECTED
+                start = time.monotonic()
+                while True:
+                    state = ws_helper.get_connection_state(client_id)
+                    ws_obj = ws_helper.active_connections.get(client_id)
+                    logger.debug(f"[TEST] Polling for DISCONNECTED: state={state} ws id={id(ws)} checked_obj id={id(ws_obj) if ws_obj else None} checked_obj state={getattr(ws_obj, 'client_state', None) if ws_obj else None} active_connections={list(ws_helper.active_connections.keys())}")
+                    if state == WebSocketState.DISCONNECTED:
+                        break
+                    if time.monotonic() - start > 2.0:
+                        break
+                    await asyncio.sleep(0.05)
+                ws_helper.debug_active_connections()
+                disconnected = state == WebSocketState.DISCONNECTED
+                logger.debug(f"[TEST] After polling: state={state} ws id={id(ws)} active_connections id={id(ws_helper.active_connections.get(client_id)) if client_id in ws_helper.active_connections else None}")
+                assert disconnected, f"WebSocket should reach DISCONNECTED state, got {state}"
                 
         # Run concurrent client workflows
         tasks = [client_workflow(cid) for cid in client_ids]
@@ -272,7 +349,7 @@ class TestWebSocketRedisIntegration:
         assert count == 0, "All connections should be cleaned up"
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_redis
 async def test_redis_connection(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -282,7 +359,7 @@ async def test_redis_connection(
     """Test WebSocket connection with Redis."""
     # Connect client
     ws = await websocket_helper.connect()
-    assert ws.client_state == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws.client_id) == WebSocketState.CONNECTED
     
     # Send test message
     test_message = {"type": "test", "content": "Hello Redis!"}
@@ -297,7 +374,7 @@ async def test_redis_connection(
     await websocket_helper.disconnect()
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_redis
 async def test_redis_broadcast(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -309,8 +386,8 @@ async def test_redis_broadcast(
     ws1 = await websocket_helper.connect()
     ws2 = await websocket_helper.connect()
     
-    assert ws1.client_state == WebSocketState.CONNECTED
-    assert ws2.client_state == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws1.client_id) == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws2.client_id) == WebSocketState.CONNECTED
     
     # Send broadcast message from first client
     broadcast_message = {"type": "broadcast", "content": "Hello everyone!"}
@@ -330,7 +407,7 @@ async def test_redis_broadcast(
     await websocket_helper.disconnect(ws2.client_id)
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_redis
 async def test_redis_reconnect(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -340,7 +417,7 @@ async def test_redis_reconnect(
     """Test WebSocket reconnection with Redis."""
     # Connect client
     ws1 = await websocket_helper.connect()
-    assert ws1.client_state == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws1.client_id) == WebSocketState.CONNECTED
     
     # Send initial message
     message1 = {"type": "test", "content": "Before disconnect"}
@@ -356,7 +433,7 @@ async def test_redis_reconnect(
     
     # Reconnect with same client ID
     ws2 = await websocket_helper.connect(client_id=ws1.client_id)
-    assert ws2.client_state == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws2.client_id) == WebSocketState.CONNECTED
     
     # Send message after reconnect
     message2 = {"type": "test", "content": "After reconnect"}
@@ -371,7 +448,7 @@ async def test_redis_reconnect(
     await websocket_helper.disconnect(ws2.client_id)
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_redis
 async def test_redis_error_handling(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -381,7 +458,7 @@ async def test_redis_error_handling(
     """Test Redis error handling."""
     # Connect client
     ws = await websocket_helper.connect()
-    assert ws.client_state == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws.client_id) == WebSocketState.CONNECTED
     
     # Simulate Redis connection error
     # This should be handled gracefully and not crash the WebSocket
@@ -389,7 +466,7 @@ async def test_redis_error_handling(
     await websocket_helper.send_json(error_message)
     
     # Connection should still be alive
-    assert ws.client_state == WebSocketState.CONNECTED
+    assert websocket_helper.get_connection_state(ws.client_id) == WebSocketState.CONNECTED
     
     # Should still be able to send/receive messages
     test_message = {"type": "test", "content": "After error"}

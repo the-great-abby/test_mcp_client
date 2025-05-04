@@ -49,7 +49,7 @@ async def create_connections(
         helpers.append(helper)
     return helpers
 
-@pytest.mark.real_service
+@pytest.mark.real_websocket
 async def test_concurrent_connections(
     auth_token: str,
     redis_rate_limiter: WebSocketRateLimiter,

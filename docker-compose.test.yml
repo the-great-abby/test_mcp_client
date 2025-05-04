@@ -21,6 +21,8 @@ services:
       - TEST_HOST=backend-test
       - TEST_PORT=8000
       - UVICORN_RELOAD=false  # Control auto-reload through environment
+      - MOCK_WEBSOCKET_MODE=1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
     env_file:
       - .env.test
     volumes:

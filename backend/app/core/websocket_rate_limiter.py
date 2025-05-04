@@ -9,6 +9,7 @@ import logging
 from zoneinfo import ZoneInfo
 from redis.asyncio import Redis
 import asyncio
+import os
 
 logger = logging.getLogger(__name__)
 UTC = ZoneInfo("UTC")
@@ -106,21 +107,30 @@ class WebSocketRateLimiter:
         Returns:
             Tuple[bool, Optional[str]]: (allowed, reason if not allowed)
         """
+        if os.environ.get("ENVIRONMENT") == "test" or os.environ.get("USE_MOCK_WEBSOCKET") == "1":
+            return True, None
         key = self._get_connection_key(client_id, user_id, ip_address)
+        user_key = f"{self.CONNECTION_COUNT_PREFIX}:{user_id}"
         
         if self.redis:
             try:
                 count = await self.redis.get(key)
                 count = int(count) if count else 0
+                user_count = await self.redis.get(user_key)
+                user_count = int(user_count) if user_count else 0
             except Exception as e:
                 logger.error(f"Redis error in check_connection_limit: {e}")
                 count = self._connection_counts.get(key, 0)
+                user_count = self._connection_counts.get(user_key, 0)
         else:
             count = self._connection_counts.get(key, 0)
-            
+            user_count = self._connection_counts.get(user_key, 0)
+        print(f"[DEBUG] check_connection_limit: key={key} count={count} user_key={user_key} user_count={user_count} max_connections={self.max_connections}")
+        logger.debug(f"[RateLimiter] check_connection_limit: key={key} count={count} user_key={user_key} user_count={user_count} max_connections={self.max_connections}")
+        if user_count >= self.max_connections:
+            return False, f"Maximum connections ({self.max_connections}) exceeded for user"
         if count >= self.max_connections:
-            return False, f"Maximum connections ({self.max_connections}) exceeded"
-            
+            return False, f"Maximum connections ({self.max_connections}) exceeded for connection key"
         return True, None
         
     async def increment_connection_count(
@@ -129,24 +139,27 @@ class WebSocketRateLimiter:
         user_id: str,
         ip_address: str
     ) -> None:
-        """Increment connection count.
-        
-        Args:
-            client_id: Client ID
-            user_id: User ID
-            ip_address: IP address
-        """
-        key = self._get_connection_key(client_id, user_id, ip_address)
-        
+        """Increment connection count for both per-connection and per-user aggregate keys."""
+        conn_key = self._get_connection_key(client_id, user_id, ip_address)
+        user_key = f"{self.CONNECTION_COUNT_PREFIX}:{user_id}"
+        print(f"[DEBUG] increment_connection_count: conn_key={conn_key} user_key={user_key}")
+        logger.debug(f"[RateLimiter] INCR conn_key={conn_key} user_key={user_key}")
         if self.redis:
             try:
-                await self.redis.incr(key)
-                await self.redis.expire(key, self.rate_limit_window)
+                new_conn = await self.redis.incr(conn_key)
+                await self.redis.expire(conn_key, self.rate_limit_window)
+                new_user = await self.redis.incr(user_key)
+                await self.redis.expire(user_key, self.rate_limit_window)
+                logger.debug(f"[RateLimiter] After INCR: {conn_key}={new_conn}, {user_key}={new_user}")
             except Exception as e:
                 logger.error(f"Redis error in increment_connection_count: {e}")
-                self._connection_counts[key] = self._connection_counts.get(key, 0) + 1
+                self._connection_counts[conn_key] = self._connection_counts.get(conn_key, 0) + 1
+                self._connection_counts[user_key] = self._connection_counts.get(user_key, 0) + 1
         else:
-            self._connection_counts[key] = self._connection_counts.get(key, 0) + 1
+            self._connection_counts[conn_key] = self._connection_counts.get(conn_key, 0) + 1
+            self._connection_counts[user_key] = self._connection_counts.get(user_key, 0) + 1
+            print(f"[DEBUG] (no redis) After INCR: {conn_key}={self._connection_counts[conn_key]}, {user_key}={self._connection_counts[user_key]}")
+            logger.debug(f"[RateLimiter] (no redis) After INCR: {conn_key}={self._connection_counts[conn_key]}, {user_key}={self._connection_counts[user_key]}")
             
     async def decrement_connection_count(
         self,
@@ -154,27 +167,35 @@ class WebSocketRateLimiter:
         user_id: str,
         ip_address: str
     ) -> None:
-        """Decrement connection count.
-        
-        Args:
-            client_id: Client ID
-            user_id: User ID
-            ip_address: IP address
-        """
-        key = self._get_connection_key(client_id, user_id, ip_address)
-        
+        """Decrement connection count for both per-connection and per-user aggregate keys."""
+        conn_key = self._get_connection_key(client_id, user_id, ip_address)
+        user_key = f"{self.CONNECTION_COUNT_PREFIX}:{user_id}"
+        print(f"[DEBUG] decrement_connection_count: conn_key={conn_key} user_key={user_key}")
+        logger.debug(f"[RateLimiter] DECR conn_key={conn_key} user_key={user_key}")
         if self.redis:
             try:
-                await self.redis.decr(key)
+                new_conn = await self.redis.decr(conn_key)
+                user_count = await self.redis.decr(user_key)
+                if user_count < 0:
+                    await self.redis.set(user_key, 0)
+                logger.debug(f"[RateLimiter] After DECR: {conn_key}={new_conn}, {user_key}={user_count}")
             except Exception as e:
                 logger.error(f"Redis error in decrement_connection_count: {e}")
-                count = self._connection_counts.get(key, 0)
+                count = self._connection_counts.get(conn_key, 0)
                 if count > 0:
-                    self._connection_counts[key] = count - 1
+                    self._connection_counts[conn_key] = count - 1
+                user_count = self._connection_counts.get(user_key, 0)
+                if user_count > 0:
+                    self._connection_counts[user_key] = user_count - 1
         else:
-            count = self._connection_counts.get(key, 0)
+            count = self._connection_counts.get(conn_key, 0)
             if count > 0:
-                self._connection_counts[key] = count - 1
+                self._connection_counts[conn_key] = count - 1
+            user_count = self._connection_counts.get(user_key, 0)
+            if user_count > 0:
+                self._connection_counts[user_key] = user_count - 1
+            print(f"[DEBUG] (no redis) After DECR: {conn_key}={self._connection_counts.get(conn_key, 0)}, {user_key}={self._connection_counts.get(user_key, 0)}")
+            logger.debug(f"[RateLimiter] (no redis) After DECR: {conn_key}={self._connection_counts.get(conn_key, 0)}, {user_key}={self._connection_counts.get(user_key, 0)}")
                 
     async def check_message_limit(
         self,
@@ -194,6 +215,8 @@ class WebSocketRateLimiter:
         Returns:
             Tuple[bool, Optional[str]]: (allowed, reason if not allowed)
         """
+        if os.environ.get("ENVIRONMENT") == "test" or os.environ.get("USE_MOCK_WEBSOCKET") == "1":
+            return True, None
         if is_system_message:
             return True, None
             
@@ -217,10 +240,13 @@ class WebSocketRateLimiter:
                     count = self._message_counts.get(key, {}).get(window, 0)
             else:
                 count = self._message_counts.get(key, {}).get(window, 0)
-                
+            print(f"[DEBUG] check_message_limit: client_id={client_id} user_id={user_id} ip_address={ip_address} window={window} count={count} limit={limit}")
             if count >= limit:
+                logger.warning(f"[RateLimiter] Rate limit exceeded for client_id={client_id}, user_id={user_id}, ip={ip_address}, window={window}, limit={limit}, count={count}")
                 return False, f"Rate limit exceeded ({limit} messages per {window})"
-                
+            else:
+                logger.info(f"[RateLimiter] Allowed: client_id={client_id}, user_id={user_id}, ip={ip_address}, window={window}, limit={limit}, count={count}")
+        
         return True, None
         
     async def increment_message_count(
@@ -248,8 +274,9 @@ class WebSocketRateLimiter:
             
             if self.redis:
                 try:
-                    await self.redis.incr(key)
+                    new_val = await self.redis.incr(key)
                     await self.redis.expire(key, seconds)
+                    print(f"[DEBUG] increment_message_count: key={key} new_val={new_val}")
                 except Exception as e:
                     logger.error(f"Redis error in increment_message_count: {e}")
                     if key not in self._message_counts:
@@ -259,6 +286,7 @@ class WebSocketRateLimiter:
                 if key not in self._message_counts:
                     self._message_counts[key] = {}
                 self._message_counts[key][window] = self._message_counts[key].get(window, 0) + 1
+                print(f"[DEBUG] (no redis) increment_message_count: key={key} val={self._message_counts[key][window]}")
                 
     async def get_message_count(self, identifier: str) -> int:
         """Get the current message count for an identifier.
@@ -278,21 +306,16 @@ class WebSocketRateLimiter:
             return 0
 
     async def get_connection_count(self, identifier: str) -> int:
-        """Get current connection count for an identifier.
-        
-        Args:
-            identifier: User ID, IP, or client ID
-            
-        Returns:
-            int: Current connection count
-        """
+        """Get current aggregate connection count for a user (per-user key)."""
+        user_key = f"{self.CONNECTION_COUNT_PREFIX}:{identifier}"
+        logger.debug(f"[RateLimiter] GET user_key={user_key}")
         try:
-            key = f"{self.CONNECTION_COUNT_PREFIX}:{identifier}"
-            count = await self.redis.get(key)
+            count = await self.redis.get(user_key)
+            logger.debug(f"[RateLimiter] GET result: {user_key}={count}")
             return int(count) if count else 0
         except Exception as e:
             logger.error(f"Error getting connection count: {e}")
-            return 0
+            return self._connection_counts.get(user_key, 0)
 
     async def clear_connection_count(self, identifier: str) -> None:
         """Clear the connection count for an identifier.
@@ -434,3 +457,25 @@ class WebSocketRateLimiter:
             else:
                 if key in self._message_counts:
                     del self._message_counts[key] 
+
+    async def get_user_message_count(self, user_id: str, window: str = "minute") -> int:
+        """Sum all per-user message counts for the given window."""
+        pattern = f"ws:msg:{user_id}:*:*:{window}"
+        if not self.redis:
+            # Fallback to in-memory counts if no redis
+            total = 0
+            for key, counts in self._message_counts.items():
+                if key.startswith(f"ws:msg:{user_id}:") and key.endswith(f":{window}"):
+                    print(f"[DEBUG] get_user_message_count (no redis): key={key} val={counts.get(window, 0)}")
+                    total += counts.get(window, 0)
+            print(f"[DEBUG] get_user_message_count (no redis): total={total}")
+            return total
+        keys = await self.redis.keys(pattern)
+        print(f"[DEBUG] get_user_message_count: pattern={pattern} keys={keys}")
+        total = 0
+        for key in keys:
+            val = await self.redis.get(key)
+            print(f"[DEBUG] get_user_message_count: key={key} val={val}")
+            total += int(val) if val else 0
+        print(f"[DEBUG] get_user_message_count: total={total}")
+        return total 

@@ -62,8 +62,7 @@ async def test_not_found_handler_direct(mock_request):
     """Test that NotFoundError is handled correctly by calling the handler directly."""
     exc = NotFoundError(
         message="Resource not found",
-        code="resource_not_found",
-        status_code=404
+        code="resource_not_found"
     )
     response = await app_error_handler(mock_request, exc)
     assert isinstance(response, JSONResponse)
@@ -87,7 +86,6 @@ async def test_validation_error_handler_direct(mock_request):
     exc = ValidationError(
         message="Invalid data",
         code="validation_error",
-        status_code=422,
         errors=errors
     )
     response = await validation_error_handler(mock_request, exc)

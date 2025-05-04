@@ -98,7 +98,7 @@ async def test_verify_token(
     
     # Test valid token
     payload = await verify_token(token=token)
-    assert payload.sub == user_id_str
+    assert payload["sub"] == user_id_str
     
     # Test invalid token format
     with pytest.raises(HTTPException) as exc_info:
@@ -123,6 +123,7 @@ async def test_verify_token(
     assert exc_info.value.status_code == 401
     assert exc_info.value.detail == "Token has expired"
 
+@pytest.mark.db_test
 @pytest.mark.mock_service
 @pytest.mark.asyncio
 async def test_get_current_user_from_token(
@@ -179,7 +180,7 @@ async def test_verify_token_valid():
     # Verify the token
     payload = await verify_token(token)
     assert payload is not None
-    assert payload.sub == user_id
+    assert payload["sub"] == user_id
 
 @pytest.mark.asyncio
 async def test_verify_token_expired():
@@ -190,7 +191,6 @@ async def test_verify_token_expired():
         data={"sub": user_id},
         expires_delta=timedelta(minutes=-15)
     )
-    
     # Verify the token raises exception
     with pytest.raises(HTTPException) as exc_info:
         await verify_token(token)
@@ -201,8 +201,10 @@ async def test_verify_token_expired():
 async def test_verify_token_invalid():
     """Test verifying an invalid token."""
     # Try to verify an invalid token
-    payload = await verify_token("invalid.token.here")
-    assert payload is None
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_token("invalid.token.here")
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Could not validate credentials"
 
 @pytest.mark.asyncio
 async def test_get_current_user_from_token_valid(mock_user: User):

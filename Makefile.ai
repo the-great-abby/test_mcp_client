@@ -1,7 +1,24 @@
 # AI-friendly Makefile
 # All commands return JSON output and include state management
 
-.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html
+# Default environment variables for test and dev
+LOG_LEVEL ?= INFO
+USE_MOCK_WEBSOCKET ?= 0
+ENVIRONMENT ?= test
+REDIS_HOST ?= redis-test
+REDIS_PORT ?= 6379
+POSTGRES_HOST ?= db-test
+POSTGRES_PORT ?= 5432
+POSTGRES_USER ?= postgres
+POSTGRES_PASSWORD ?= postgres
+POSTGRES_DB ?= test_db
+ANTHROPIC_API_KEY ?=
+PYTHONUNBUFFERED ?= 1
+
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html ai-anthropic-ws-test ai-anthropic-http-test
+
+# Set default coverage threshold, can be overridden: make -f Makefile.ai ai-test-coverage COVERAGE_FAIL_UNDER=40
+COVERAGE_FAIL_UNDER ?= 80
 
 # Helper function to format JSON output
 define json_output
@@ -46,7 +63,7 @@ ai-logs:
 ai-test:
 	@echo '{"status": "starting", "action": "test", "message": "Running tests with args: $(PYTEST_ARGS)"}'
 	@make -f Makefile.ai test-setup
-	@docker compose -f docker-compose.test.yml exec -T backend-test python -m pytest tests $(PYTEST_ARGS)
+	@docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test python -m pytest tests $(PYTEST_ARGS)
 	@echo '{"status": "complete", "action": "test", "message": "Tests complete"}'
 
 # Run migrations with state tracking
@@ -68,15 +85,15 @@ ai-validate:
 ai-test-websocket:
 	@echo '{"status": "starting", "action": "test-websocket", "message": "Running WebSocket tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/test_websocket.py -v $(PYTEST_ARGS) 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test pytest tests/test_websocket.py -v $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-websocket","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
-# Run unit tests only
+# Run unit tests only (not mock_service or real_service)
 ai-test-unit:
 	@echo '{"status": "starting", "action": "test-unit", "message": "Running unit tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests -v $(PYTEST_ARGS) 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -e USE_MOCK_WEBSOCKET=1 -T backend-test pytest tests/unit -v -m 'not mock_service and not real_service' $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-unit","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -84,7 +101,7 @@ ai-test-unit:
 ai-test-integration:
 	@echo '{"status": "starting", "action": "test-integration", "message": "Running integration tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest tests/integration -v $(PYTEST_ARGS) 2>&1); \
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test pytest tests/integration -v $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-integration","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -92,16 +109,17 @@ ai-test-integration:
 ai-test-coverage:
 	@echo '{"status": "starting", "action": "test-coverage", "message": "Running tests with coverage..."}'
 	@make -f Makefile.ai test-setup
-	@docker compose -f docker-compose.test.yml exec -T backend-test sh -c 'echo "[COVERAGE] Removing old .coverage files..." && rm -f /app/.coverage /app/coverage_data/.coverage && echo "[COVERAGE] Old .coverage files removed."'
-	@docker compose -f docker-compose.test.yml exec -T backend-test coverage run -m pytest $(PYTEST_ARGS)
-	@docker compose -f docker-compose.test.yml exec -T backend-test sh -c 'echo "[COVERAGE] Before copy: "; ls -lh /app/.coverage || echo "[COVERAGE] /app/.coverage not found"; ls -lh /app/coverage_data; cp /app/.coverage /app/coverage_data/.coverage 2>/dev/null || true; echo "[COVERAGE] After copy: "; ls -lh /app/coverage_data'
+	@docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test sh -c 'echo "[COVERAGE] Removing old .coverage files..." && rm -f /app/.coverage /app/coverage_data/.coverage && echo "[COVERAGE] Old .coverage files removed."'
+	@docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test coverage run -m pytest $(PYTEST_ARGS)
+	@docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test sh -c 'echo "[COVERAGE] Before copy: "; ls -lh /app/.coverage || echo "[COVERAGE] /app/.coverage not found"; ls -lh /app/coverage_data; cp /app/.coverage /app/coverage_data/.coverage 2>/dev/null || true; echo "[COVERAGE] After copy: "; ls -lh /app/coverage_data'
+	@docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test coverage report --fail-under=$(COVERAGE_FAIL_UNDER) --data-file=/app/coverage_data/.coverage -m
 
 # Target to run tests and log output to a file (Restored Version)
 ai-test-log:
 	@echo "🚀 Running AI Tests and logging output to test_output.log..." > test_output.log # Overwrite log file initially
 	@echo "🔧 Running pytest with coverage..." >> test_output.log 2>&1
 	@docker compose -f docker-compose.test.yml exec -T backend-test pytest \
-		--cov=app --cov-report=term-missing --cov-fail-under=80 \
+		--cov=app --cov-report=term-missing --cov-fail-under=$(COVERAGE_FAIL_UNDER) \
 		-W ignore::DeprecationWarning -v tests/ >> test_output.log 2>&1 \
 	|| (echo "❌ Tests failed. Output logged to test_output.log." >> test_output.log && exit 1)
 	@echo "✅ Tests completed. Output logged to test_output.log." >> test_output.log
@@ -203,11 +221,12 @@ ai-test-real:
 	exit_code=$$?; \
 	$(call json_output,"ai-test-real","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
-# Run tests with the mock_service marker
+# Run all tests with the mock_service marker (anywhere in tests/)
 ai-test-mock:
 	@echo '{"status": "starting", "action": "test-mock", "message": "Running mock_service tests..."}'
 	@make -f Makefile.ai test-setup
-	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest -m mock_service tests -v $(PYTEST_ARGS) 2>&1); \
+	# MOCK_WS_CONNECT_ERROR is now set per-test via pytest marker/fixture, not globally
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e USE_MOCK_WEBSOCKET=1 -T backend-test pytest -m mock_service tests -v $(PYTEST_ARGS) 2>&1); \
 	exit_code=$$?; \
 	$(call json_output,"ai-test-mock","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
 
@@ -277,3 +296,88 @@ aio-coverage-html:
 # Open HTML coverage report in default browser (macOS)
 aio-coverage-open-html:
 	@open htmlcov/index.html
+
+# Post a test message to Anthropic's API
+ai-anthropic-ws-test:
+	docker compose -f docker-compose.test.yml exec backend-test python /app/scripts/anthropic_ws_direct.py
+
+ai-anthropic-http-test:
+	docker compose -f docker-compose.test.yml exec backend-test python /app/scripts/anthropic_http_post.py
+
+# Run only mock_service tests in integration/websocket (always set USE_MOCK_WEBSOCKET=1)
+ai-test-websocket-mock:
+	@echo '{"status": "starting", "action": "test-websocket-mock", "message": "Running WebSocket mock_service tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e USE_MOCK_WEBSOCKET=1 -T backend-test pytest tests/integration/websocket -m mock_service -v $(PYTEST_ARGS) 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-websocket-mock","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Marker-specific test targets for new marker scheme
+#
+# Usage examples:
+#   make -f Makefile.ai ai-test-real-websocket   # Run only tests marked with real_websocket
+#   make -f Makefile.ai ai-test-real-redis       # Run only tests marked with real_redis
+#   make -f Makefile.ai ai-test-real-anthropic   # Run only tests marked with real_anthropic
+#   make -f Makefile.ai ai-test-websocket-mock   # Run only tests marked with mock_service (WebSocket)
+#
+# These targets ensure the correct environment variables are set for each test type.
+
+ai-test-real-websocket:
+	@echo '{"status": "starting", "action": "test-real-websocket", "message": "Running real_websocket tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -T backend-test pytest -m real_websocket tests -v $(PYTEST_ARGS) 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-real-websocket","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+ai-test-real-redis:
+	@echo '{"status": "starting", "action": "test-real-redis", "message": "Running real_redis tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e REDIS_HOST=redis-test -T backend-test pytest -m real_redis tests -v $(PYTEST_ARGS) 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-real-redis","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+ai-test-real-anthropic:
+	@echo '{"status": "starting", "action": "test-real-anthropic", "message": "Running real_anthropic tests..."}'
+	@make -f Makefile.ai test-setup
+	@(output=$$(docker compose -f docker-compose.test.yml exec -e ANTHROPIC_API_KEY=$$ANTHROPIC_API_KEY -T backend-test pytest -m real_anthropic tests -v $(PYTEST_ARGS) 2>&1); \
+	exit_code=$$?; \
+	$(call json_output,"ai-test-real-anthropic","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\"}")) 2>/dev/null
+
+# Marker-specific test targets with fail-fast, verbose, and short traceback output
+#
+# Usage examples:
+#   make -f Makefile.ai ai-test-websocket-mock-xv   # Mock WebSocket tests, fail-fast, verbose, short traceback
+#   make -f Makefile.ai ai-test-real-websocket-xv  # Real WebSocket tests, fail-fast, verbose, short traceback
+#   make -f Makefile.ai ai-test-real-redis-xv      # Real Redis tests, fail-fast, verbose, short traceback
+#   make -f Makefile.ai ai-test-real-anthropic-xv  # Real Anthropic tests, fail-fast, verbose, short traceback
+#
+# These targets are for quick debugging of the first failing test in each marker group.
+
+ai-test-websocket-mock-xv:
+	@docker compose -f docker-compose.test.yml exec -e USE_MOCK_WEBSOCKET=1 -T backend-test pytest tests/integration/websocket -m mock_service -x -v --tb=short $(PYTEST_ARGS)
+
+ai-test-real-websocket-xv:
+	@$(MAKE) -f Makefile.ai ai-test-real-websocket PYTEST_ARGS='-x -v --tb=short' $(MAKECMDGOALS)
+
+ai-test-real-redis-xv:
+	@$(MAKE) -f Makefile.ai ai-test-real-redis PYTEST_ARGS='-x -v --tb=short' $(MAKECMDGOALS)
+
+ai-test-real-anthropic-xv:
+	@$(MAKE) -f Makefile.ai ai-test-real-anthropic PYTEST_ARGS='-x -v --tb=short' $(MAKECMDGOALS)
+
+# Marker-specific test target for mock WebSocket with fail-fast, verbose, short traceback, and output logging
+# Now sets PYTHONUNBUFFERED=1 to ensure all output is flushed to the log file.
+ai-test-websocket-mock-xv-log:
+	@echo 'Running mock WebSocket tests with -x -v --tb=short and logging output to test_output.log...'
+	@docker compose -f docker-compose.test.yml exec -e USE_MOCK_WEBSOCKET=1 -T backend-test sh -c 'PYTHONUNBUFFERED=1 pytest -m mock_service -x -v --tb=short --maxfail=1' > test_output.log 2>&1
+	@cat test_output.log
+
+# Run Redis mock tests with fail-fast, verbose, and short traceback output
+ai-test-redis-mock-xv:
+	@echo 'Running Redis mock tests with -x -v --tb=short...'
+	@PYTHONPATH=backend pytest -x -v --tb=short backend/tests/utils/test_mock_redis.py backend/tests/unit/test_mock_redis.py
+
+# Add new target ai-test-redis-mock-sync
+ai-test-redis-mock-sync:
+	@echo 'Running sync Redis mock tests...'
+	PYTHONPATH=backend pytest backend/tests/utils/test_sync_mock_redis.py -v

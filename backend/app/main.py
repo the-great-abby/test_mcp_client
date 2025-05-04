@@ -37,13 +37,6 @@ logger = logging.getLogger(__name__)
 # Valid log levels
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-# Define valid log levels and ensure proper format
-VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-log_level = settings.LOG_LEVEL.upper() if isinstance(settings.LOG_LEVEL, str) else "INFO"
-if log_level not in VALID_LOG_LEVELS:
-    logger.warning(f"Invalid log level: {log_level}, defaulting to INFO")
-    log_level = "INFO"
-
 def create_app() -> FastAPI:
     """Create FastAPI application."""
     app = FastAPI(

@@ -246,8 +246,10 @@ async def initialize_test_db():
         await session.close()
 
 @pytest.fixture(autouse=True)
-async def clean_users_table(db: AsyncSession, initialize_test_db):
-    """Clean users table between tests with proper transaction handling."""
+async def clean_users_table(request, db: AsyncSession, initialize_test_db):
+    """Clean users table between tests with proper transaction handling, only for db_test-marked tests."""
+    if 'db_test' not in request.keywords:
+        return
     await db.begin_nested()  # Create a savepoint
     await db.execute(text("TRUNCATE TABLE users RESTART IDENTITY CASCADE;"))
     await db.commit()
@@ -304,6 +306,9 @@ def pytest_configure(config):
     )
     config.addinivalue_line(
         "markers", "mock_service: mark test to use mock services"
+    )
+    config.addinivalue_line(
+        "markers", "db_test: mark test as requiring database setup/teardown"
     )
 
 @pytest.fixture(scope="session")
@@ -376,4 +381,19 @@ def test_client() -> Generator[TestClient, None, None]:
 async def async_client() -> AsyncGenerator[AsyncClient, None]:
     """Get async test client."""
     async with AsyncClient(app=fastapi_app, base_url="http://test") as client:
-        yield client 
+        yield client
+
+@pytest.fixture
+def ws_helper():
+    raise RuntimeError(
+        "ws_helper fixture was requested but is not defined for this test context. "
+        "Make sure you have the correct conftest.py for your test type (mock, unit, integration)."
+    )
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--ws-token-query",
+        action="store_true",
+        default=False,
+        help="Send WebSocket token as a query parameter instead of a header."
+    ) 

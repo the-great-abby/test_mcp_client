@@ -8,10 +8,12 @@ from fastapi import status
 from starlette.websockets import WebSocketState
 import uuid
 import copy
+import os
 
 from app.core.websocket import WebSocketManager
 from app.core.websocket_rate_limiter import WebSocketRateLimiter
 from tests.utils.mock_websocket import MockWebSocket
+from tests.utils.real_websocket_client import RealWebSocketClient
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +28,9 @@ class WebSocketTestHelper:
         test_ip: str = "127.0.0.1",
         auth_token: Optional[str] = None,
         connect_timeout: float = 5.0,
-        message_timeout: float = 5.0
+        message_timeout: float = 5.0,
+        mock_mode: bool = False,
+        ws_token_query: bool = False
     ):
         """Initialize WebSocket test helper.
 
@@ -38,6 +42,8 @@ class WebSocketTestHelper:
             auth_token: Optional auth token
             connect_timeout: Connection timeout in seconds
             message_timeout: Message timeout in seconds
+            mock_mode: Whether to use the mock WebSocket (default False)
+            ws_token_query: Whether to send token as query param (default False)
         """
         self.websocket_manager = websocket_manager
         self.rate_limiter = rate_limiter
@@ -46,69 +52,93 @@ class WebSocketTestHelper:
         self.auth_token = auth_token
         self.connect_timeout = connect_timeout
         self.message_timeout = message_timeout
+        self.mock_mode = mock_mode
+        self.ws_token_query = ws_token_query
+        print(f"[DEBUG][WebSocketTestHelper.__init__] mock_mode: {mock_mode} ws_token_query: {ws_token_query}")
         self.active_connections: Dict[str, MockWebSocket] = {}
         self.stream_messages: Dict[str, List[Dict[str, Any]]] = {}
+
+    async def connect_and_catch(
+        self,
+        client_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        auth_token: Optional[str] = None,
+        token: Optional[str] = None,
+        connect_timeout: Optional[float] = None,
+        request=None
+    ):
+        """Create and connect a mock or real WebSocket, returning (ws, exc)."""
+        print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] called. Using class: {self.__class__.__name__}")
+        print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] self.mock_mode: {self.mock_mode}")
+        user_id = user_id or self.test_user_id
+        auth_token = token or auth_token or self.auth_token
+        timeout = connect_timeout or self.connect_timeout
+        ws = None
+        exc = None
+        ws_token_query = self.ws_token_query
+        if request is not None and hasattr(request, 'config') and hasattr(request.config, 'getoption'):
+            ws_token_query = request.config.getoption('ws_token_query', False)
+        if self.mock_mode:
+            print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] Instantiating MockWebSocket for client_id={client_id}")
+            ws = MockWebSocket(
+                client_id=client_id,
+                user_id=user_id,
+                ip_address=self.test_ip,
+                query_params={"token": auth_token} if auth_token and ws_token_query else {}
+            )
+            logger.debug(f"[WebSocketTestHelper] After MockWebSocket __init__: client_id={client_id} state={ws.client_state}")
+            try:
+                print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] About to call websocket_manager.connect for client_id={client_id}")
+                async with asyncio.timeout(timeout):
+                    await self.websocket_manager.connect(
+                        client_id=client_id,
+                        websocket=ws,
+                        user_id=user_id
+                    )
+                print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] After websocket_manager.connect for client_id={client_id}")
+                if not client_id:
+                    raise RuntimeError("Connection succeeded with missing client ID")
+                self.add_connection(client_id, ws)
+                logger.debug(f"[WebSocketTestHelper] After websocket_manager.connect: client_id={client_id} state={ws.client_state}")
+                logger.debug(f"[WebSocketTestHelper] After add_connection: client_id={client_id} state={ws.client_state}")
+                self.debug_active_connections()
+                if os.environ.get("ENVIRONMENT") == "test":
+                    await self.send_message(client_id, {"type": "ping"})
+                    pong = await self.receive_message(client_id)
+                    logger.debug(f"[WebSocketTestHelper] Received pong after connect: {pong}")
+            except Exception as e:
+                exc = e
+        else:
+            print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] Instantiating RealWebSocketClient for client_id={client_id}")
+            ws_uri = os.getenv("TEST_WS_URI", "ws://backend-test:8000/ws")
+            ws_token = auth_token or os.getenv("TEST_USER_TOKEN")
+            print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] Connecting to URL: {ws_uri}?token={ws_token}&client_id={client_id}")
+            ws = RealWebSocketClient(uri=ws_uri, token=ws_token, debug=True, ws_token_query=ws_token_query)
+            try:
+                await ws.connect()
+            except Exception as e:
+                exc = e
+        print(f"[DEBUG][WebSocketTestHelper.connect_and_catch] ws instance type: {type(ws)} exc: {exc}")
+        return ws, exc
 
     async def connect(
         self,
         client_id: Optional[str] = None,
         user_id: Optional[str] = None,
         auth_token: Optional[str] = None,
+        token: Optional[str] = None,
         connect_timeout: Optional[float] = None
-    ) -> MockWebSocket:
-        """Create and connect a mock WebSocket.
-
-        Args:
-            client_id: Optional client ID (generated if not provided)
-            user_id: Optional user ID (uses test_user_id if not provided)
-            auth_token: Optional auth token (overrides instance auth_token)
-            connect_timeout: Optional connection timeout
-
-        Returns:
-            Connected MockWebSocket instance
-
-        Raises:
-            ConnectionClosed: If connection is rejected
-            TimeoutError: If connection times out
-            RuntimeError: If connection succeeds with missing client ID
-        """
-        user_id = user_id or self.test_user_id
-        auth_token = auth_token or self.auth_token
-        timeout = connect_timeout or self.connect_timeout
-
-        # Create mock WebSocket
-        websocket = MockWebSocket(
-            client_id=client_id,  # Pass None directly to test missing client ID
+    ):
+        ws, exc = await self.connect_and_catch(
+            client_id=client_id,
             user_id=user_id,
-            ip_address=self.test_ip,
-            query_params={"token": auth_token} if auth_token else {}
+            auth_token=auth_token,
+            token=token,
+            connect_timeout=connect_timeout
         )
-
-        try:
-            # Connect with timeout
-            async with asyncio.timeout(timeout):
-                await self.websocket_manager.connect(
-                    client_id=client_id,  # Pass None directly to test missing client ID
-                    websocket=websocket,
-                    user_id=user_id
-                )
-
-            # If we get here with a missing client ID, something is wrong
-            if not client_id:
-                raise RuntimeError("Connection succeeded with missing client ID")
-
-            self.active_connections[client_id] = websocket
-            return websocket
-
-        except ConnectionClosed:
-            # Expected for missing client ID
-            raise
-        except asyncio.TimeoutError:
-            logger.error(f"Connection timeout for client {client_id}")
-            raise
-        except Exception as e:
-            logger.error(f"Connection error for client {client_id}: {e}")
-            raise
+        if exc is not None:
+            raise exc
+        return ws
 
     async def disconnect(self, client_id: str) -> None:
         """Disconnect a WebSocket connection.
@@ -116,11 +146,21 @@ class WebSocketTestHelper:
         Args:
             client_id: Client ID to disconnect
         """
+        logger.debug(f"[WebSocketTestHelper] disconnect called for client_id={client_id}")
         if client_id in self.active_connections:
+            websocket = self.active_connections[client_id]
+            logger.debug(f"[WebSocketTestHelper] disconnect: websocket id={id(websocket)} state={websocket.client_state}")
             await self.websocket_manager.disconnect(client_id)
-            del self.active_connections[client_id]
+            # Ensure the mock websocket state is set to DISCONNECTED
+            if hasattr(websocket, "client_state") and websocket.client_state != WebSocketState.DISCONNECTED:
+                websocket.client_state = WebSocketState.DISCONNECTED
+                logger.debug(f"[WebSocketTestHelper] Forced client_state DISCONNECTED for client_id={client_id}")
+            logger.debug(f"[WebSocketTestHelper] Removing client_id={client_id} from active_connections (final state: {websocket.client_state}, id={id(websocket)})")
+            self.remove_connection(client_id)
+            self.debug_active_connections()
             if client_id in self.stream_messages:
                 del self.stream_messages[client_id]
+            await asyncio.sleep(0)  # Yield to event loop
 
     async def send_json(
         self,
@@ -140,16 +180,25 @@ class WebSocketTestHelper:
         Returns:
             Response data
         """
-        websocket = self.active_connections.get(client_id)
-        if not websocket:
+        print(f"[DEBUG][WebSocketTestHelper.send_json] called. Using class: {self.__class__.__name__}")
+        ws = self.active_connections.get(client_id)
+        print(f"[DEBUG][WebSocketTestHelper.send_json] ws instance type: {type(ws)} for client_id={client_id}")
+        logger.debug(f"[WebSocketTestHelper] send_json: client_id={client_id} data={data}")
+        if not ws:
+            logger.error(f"[WebSocketTestHelper] send_json: No active connection for client {client_id}")
             raise ValueError(f"No active connection for client {client_id}")
 
+        logger.debug(f"[WebSocketTestHelper] send_json: connection state before send: {ws.client_state}")
         try:
+            logger.debug(f"[WebSocketTestHelper] send_json: Before send_message client_id={client_id}")
             async with asyncio.timeout(timeout or self.message_timeout):
                 await self.websocket_manager.send_message(client_id, data)
-                response = await websocket.receive_json()
+                logger.debug(f"[WebSocketTestHelper] send_json: After send_message, before receive_json client_id={client_id} connection state: {ws.client_state}")
+                response = await ws.receive_json()
+                logger.debug(f"[WebSocketTestHelper] send_json: After receive_json client_id={client_id} response={response} connection state: {ws.client_state}")
 
                 if not ignore_errors and response.get("type") == "error":
+                    logger.error(f"[WebSocketTestHelper] send_json: Received error response for client_id={client_id}: {response}")
                     raise ConnectionClosed(
                         Close(code=status.WS_1008_POLICY_VIOLATION, reason=response.get("content", "Unknown error")),
                         None
@@ -158,9 +207,10 @@ class WebSocketTestHelper:
                 return response
 
         except asyncio.TimeoutError:
-            logger.error(f"Message timeout for client {client_id}")
+            logger.error(f"[WebSocketTestHelper] send_json: Message timeout for client {client_id}")
             raise
         except Exception as e:
+            logger.error(f"[WebSocketTestHelper] send_json: Exception for client {client_id}: {e}")
             if not ignore_errors:
                 raise
             logger.warning(f"Error ignored for client {client_id}: {e}")
@@ -231,9 +281,9 @@ class WebSocketTestHelper:
             Current WebSocket state
         """
         websocket = self.active_connections.get(client_id)
-        if not websocket:
-            return WebSocketState.DISCONNECTED
-        return websocket.client_state
+        logger.debug(f"[WebSocketTestHelper] get_connection_state: client_id={client_id} id={id(websocket) if websocket else None} state={websocket.client_state if websocket else None}")
+        self.debug_active_connections()
+        return websocket.client_state if websocket else WebSocketState.DISCONNECTED
 
     async def cleanup(self) -> None:
         """Clean up all test connections."""
@@ -326,22 +376,18 @@ class WebSocketTestHelper:
         client_id: str,
         timeout: float = 5.0
     ) -> Dict[str, Any]:
-        """Receive a message from a test WebSocket client.
-
-        Args:
-            client_id: Client ID
-            timeout: Timeout in seconds
-
-        Returns:
-            Received message
-        """
+        """Receive a message from a test WebSocket client, skipping 'ping' messages."""
         if client_id not in self.active_connections:
             raise ValueError(f"Client {client_id} not connected")
 
         websocket = self.active_connections[client_id]
         try:
             async with asyncio.timeout(timeout):
-                return await websocket.receive_json()
+                while True:
+                    msg = await websocket.receive_json()
+                    if msg.get("type") == "ping":
+                        continue  # Skip echoed ping
+                    return msg
         except asyncio.TimeoutError:
             logger.error(f"Timeout waiting for message from {client_id}")
             raise
@@ -400,3 +446,23 @@ class WebSocketTestHelper:
         except asyncio.TimeoutError:
             logger.error(f"Timeout waiting for message type {message_type}")
             raise
+
+    @property
+    def ws_manager(self) -> WebSocketManager:
+        """Expose the underlying WebSocketManager for test patching."""
+        return self.websocket_manager
+
+    def debug_active_connections(self):
+        """Log all active connection ids and their states/ids for debugging."""
+        for cid, ws in self.active_connections.items():
+            logger.debug(f"[WebSocketTestHelper] active: client_id={cid} state={ws.client_state} id={id(ws)}")
+
+    def add_connection(self, client_id: str, ws: MockWebSocket):
+        logger.debug(f"[WebSocketTestHelper] ADD active_connections: client_id={client_id} id={id(ws)} state={ws.client_state}")
+        self.active_connections[client_id] = ws
+
+    def remove_connection(self, client_id: str):
+        ws = self.active_connections.get(client_id)
+        logger.debug(f"[WebSocketTestHelper] REMOVE active_connections: client_id={client_id} id={id(ws) if ws else None} state={ws.client_state if ws else None}")
+        if client_id in self.active_connections:
+            del self.active_connections[client_id]

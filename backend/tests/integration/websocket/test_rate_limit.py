@@ -4,8 +4,9 @@ import pytest
 from fastapi import status
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close
+import uuid
 
-from app.core.websocket import WebSocketManager
+from app.core.websocket import WebSocketManager, WebSocketState
 from app.core.websocket_rate_limiter import WebSocketRateLimiter
 from app.models.user import User
 from tests.utils.websocket_test_helper import WebSocketTestHelper
@@ -20,36 +21,36 @@ RATE_LIMIT_WINDOW = 60
 CONNECT_TIMEOUT = 5.0
 MESSAGE_TIMEOUT = 5.0
 
-@pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
 async def test_connection_rate_limit(
     test_user: User,
-    websocket_helper: WebSocketTestHelper,
+    ws_helper: WebSocketTestHelper,
     websocket_manager: WebSocketManager
 ):
     """Test connection rate limiting."""
-    rate_limiter = WebSocketRateLimiter(
-        redis=None,  # No Redis needed for basic rate limiting
-        max_connections=MAX_CONNECTIONS,
-        messages_per_minute=MESSAGES_PER_MINUTE,
-        messages_per_hour=MESSAGES_PER_HOUR,
-        messages_per_day=MESSAGES_PER_DAY,
-        max_messages_per_second=MAX_MESSAGES_PER_SECOND,
-        rate_limit_window=RATE_LIMIT_WINDOW,
-        connect_timeout=CONNECT_TIMEOUT,
-        message_timeout=MESSAGE_TIMEOUT
-    )
+    # Patch the rate limiter for this test
+    websocket_manager.rate_limiter.max_connections = 3
+    print(f"[DEBUG] max_connections: {websocket_manager.rate_limiter.max_connections}")
     
     # Create multiple connections up to limit
     connections = []
     for i in range(MAX_CONNECTIONS):
-        ws = await websocket_helper.connect()
-        assert ws.client_state.state == "CONNECTED"
+        client_id = str(uuid.uuid4())
+        ws = await ws_helper.connect(client_id=client_id)
+        assert ws.client_state == WebSocketState.CONNECTED
+        ws.client_id = client_id  # Store for disconnect
         connections.append(ws)
+        # Print current connection count for the user
+        count = await websocket_manager.rate_limiter.get_connection_count(test_user.id)
+        print(f"[DEBUG] After connection {i+1}: connection count for user {test_user.id} = {count}")
+    
+    # Print connection count before exceeding limit
+    count = await websocket_manager.rate_limiter.get_connection_count(test_user.id)
+    print(f"[DEBUG] Before exceeding limit: connection count for user {test_user.id} = {count}")
     
     # Try to exceed connection limit
     with pytest.raises(ConnectionClosed) as exc_info:
-        await websocket_helper.connect()
+        await ws_helper.connect(client_id=str(uuid.uuid4()))
     
     close = exc_info.value.rcvd
     assert close.code == status.WS_1008_POLICY_VIOLATION
@@ -57,73 +58,73 @@ async def test_connection_rate_limit(
     
     # Clean up
     for ws in connections:
-        await websocket_helper.disconnect(ws.client_id)
+        await ws_helper.disconnect(ws.client_id)
 
-@pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
 async def test_message_rate_limit_per_second(
     test_user: User,
-    websocket_helper: WebSocketTestHelper,
+    ws_helper: WebSocketTestHelper,
     websocket_manager: WebSocketManager,
     rate_limiter: WebSocketRateLimiter
 ):
     """Test message rate limiting per second."""
-    ws = await websocket_helper.connect()
+    client_id = str(uuid.uuid4())
+    ws = await ws_helper.connect(client_id=client_id)
     
     # Send messages up to per-second limit
     for i in range(MAX_MESSAGES_PER_SECOND):
-        await websocket_helper.send_message({"type": "test", "content": f"message {i}"})
+        await ws_helper.send_message(client_id, {"type": "test", "content": f"message {i}"})
     
     # Try to exceed per-second limit
     with pytest.raises(ConnectionClosed) as exc_info:
-        await websocket_helper.send_message({"type": "test", "content": "over limit"})
+        await ws_helper.send_message(client_id, {"type": "test", "content": "over limit"})
     
     close = exc_info.value.rcvd
     assert close.code == status.WS_1008_POLICY_VIOLATION
     assert "Message rate limit exceeded" in str(close.reason)
     
-    await websocket_helper.disconnect()
+    await ws_helper.disconnect(client_id)
 
-@pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
 async def test_message_rate_limit_per_minute(
     test_user: User,
-    websocket_helper: WebSocketTestHelper,
+    ws_helper: WebSocketTestHelper,
     websocket_manager: WebSocketManager,
     rate_limiter: WebSocketRateLimiter
 ):
     """Test message rate limiting per minute."""
-    ws = await websocket_helper.connect()
+    client_id = str(uuid.uuid4())
+    ws = await ws_helper.connect(client_id=client_id)
     
     # Send messages up to per-minute limit with delay to avoid per-second limit
     for i in range(MESSAGES_PER_MINUTE):
-        await websocket_helper.send_message({"type": "test", "content": f"message {i}"})
+        await ws_helper.send_message(client_id, {"type": "test", "content": f"message {i}"})
         await asyncio.sleep(0.1)  # Add delay to avoid per-second limit
     
     # Try to exceed per-minute limit
     with pytest.raises(ConnectionClosed) as exc_info:
-        await websocket_helper.send_message({"type": "test", "content": "over limit"})
+        await ws_helper.send_message(client_id, {"type": "test", "content": "over limit"})
     
     close = exc_info.value.rcvd
     assert close.code == status.WS_1008_POLICY_VIOLATION
     assert "Message rate limit exceeded" in str(close.reason)
     
-    await websocket_helper.disconnect()
+    await ws_helper.disconnect(client_id)
 
-@pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
 async def test_rate_limit_reset(
     test_user: User,
-    websocket_helper: WebSocketTestHelper,
+    ws_helper: WebSocketTestHelper,
     websocket_manager: WebSocketManager,
     rate_limiter: WebSocketRateLimiter
 ):
     """Test rate limit counters reset after window."""
-    ws = await websocket_helper.connect()
+    client_id = str(uuid.uuid4())
+    ws = await ws_helper.connect(client_id=client_id)
     
     # Send messages up to half the per-minute limit
     for i in range(MESSAGES_PER_MINUTE // 2):
-        await websocket_helper.send_message({"type": "test", "content": f"message {i}"})
+        await ws_helper.send_message(client_id, {"type": "test", "content": f"message {i}"})
         await asyncio.sleep(0.1)
     
     # Wait for rate limit window to expire
@@ -131,7 +132,7 @@ async def test_rate_limit_reset(
     
     # Should be able to send messages again
     for i in range(MESSAGES_PER_MINUTE // 2):
-        await websocket_helper.send_message({"type": "test", "content": f"message {i}"})
+        await ws_helper.send_message(client_id, {"type": "test", "content": f"message {i}"})
         await asyncio.sleep(0.1)
     
-    await websocket_helper.disconnect() 
+    await ws_helper.disconnect(client_id) 

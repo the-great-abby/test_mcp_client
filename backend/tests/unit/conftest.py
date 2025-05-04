@@ -1,10 +1,10 @@
 import pytest
-from tests.helpers import MockRedis
+from tests.utils.mock_redis import SyncMockRedis
 
 @pytest.fixture
 def redis():
     """Provide an isolated mock Redis instance for unit tests."""
-    mock = MockRedis()
+    mock = SyncMockRedis()
     yield mock
     # Clean up after each test
     mock.flushdb()

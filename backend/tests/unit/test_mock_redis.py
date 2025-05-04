@@ -182,7 +182,7 @@ async def test_transaction_watch(pipeline, redis):
     await redis.set("watched_key", "initial")
     
     # Start transaction
-    await pipeline.watch("watched_key")
+    pipeline.watch("watched_key")
     await pipeline.multi()
     await pipeline.set("watched_key", "changed")
     await pipeline.get("watched_key")
@@ -201,7 +201,7 @@ async def test_transaction_watch_conflict(redis):
     
     # Start transaction with first pipeline
     pipeline1 = redis.pipeline()
-    await pipeline1.watch("watched_key")
+    pipeline1.watch("watched_key")
     await pipeline1.multi()
     await pipeline1.set("watched_key", "pipeline1_value")
     
@@ -225,7 +225,7 @@ async def test_complex_transaction(redis):
     await redis.set("key2", "2")
     
     # Start transaction
-    await pipeline.watch("key1", "key2")
+    pipeline.watch("key1", "key2")
     await pipeline.multi()
     
     # Queue multiple operations

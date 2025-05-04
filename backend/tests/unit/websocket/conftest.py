@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, AsyncMock
 from app.core.websocket import WebSocketManager
 from app.core.websocket_rate_limiter import WebSocketRateLimiter
 from tests.utils.websocket_test_helper import WebSocketTestHelper, MockWebSocket
+import os
 
 @pytest.fixture
 def mock_redis():
@@ -65,7 +66,8 @@ async def ws_helper(
     """Get WebSocket test helper."""
     helper = WebSocketTestHelper(
         websocket_manager=websocket_manager,
-        rate_limiter=rate_limiter
+        rate_limiter=rate_limiter,
+        mock_mode=True  # Force mock mode for unit tests
     )
     test_helpers.append(helper)
     try:
@@ -147,4 +149,24 @@ class ErrorInjectingRedis:
 @pytest.fixture
 def error_redis():
     """Get error injecting Redis instance."""
-    return ErrorInjectingRedis() 
+    return ErrorInjectingRedis()
+
+@pytest.fixture(autouse=True)
+def mock_ws_connect_error_marker(request):
+    """
+    If a test is marked with @pytest.mark.mock_ws_connect_error, set MOCK_WS_CONNECT_ERROR=1 for that test only.
+    Usage:
+        @pytest.mark.mock_ws_connect_error
+        def test_foo(...): ...
+    """
+    marker = request.node.get_closest_marker("mock_ws_connect_error")
+    if marker:
+        old = os.environ.get("MOCK_WS_CONNECT_ERROR")
+        os.environ["MOCK_WS_CONNECT_ERROR"] = "1"
+        yield
+        if old is not None:
+            os.environ["MOCK_WS_CONNECT_ERROR"] = old
+        else:
+            del os.environ["MOCK_WS_CONNECT_ERROR"]
+    else:
+        yield 

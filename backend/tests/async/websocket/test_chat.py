@@ -5,15 +5,13 @@ These tests verify the streaming behavior of chat messages in an async context.
 
 import pytest
 import json
-import websockets
 import logging
 import asyncio
 from datetime import timedelta, datetime, UTC
 import os
 import uuid
-from websockets.exceptions import WebSocketException, ConnectionClosed
-from typing import Optional, AsyncGenerator, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import AsyncGenerator
 
 from app.core.auth import create_access_token
 from tests.conftest import test_settings
@@ -121,25 +119,9 @@ async def test_token(request, test_user, test_settings) -> str:
     )
     return token
 
-@pytest.fixture
-async def websocket_client(test_token, websocket_manager, rate_limiter) -> AsyncGenerator:
-    """Create a WebSocket client for testing."""
-    client_id = str(uuid.uuid4())
-    url = f"{WS_BASE_URL}?token={test_token}&client_id={client_id}"
-    
-    try:
-        async with websockets.connect(url) as websocket:
-            yield websocket
-    except Exception as e:
-        logger.error(f"Error connecting to WebSocket: {e}")
-        raise
-    finally:
-        # Ensure cleanup
-        await websocket_manager.clear_all_connections()
-        await rate_limiter.clear_all()
-
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_websocket_chat_basic(
     test_user: User,
     test_token: str,
@@ -175,7 +157,8 @@ async def test_websocket_chat_basic(
         await rate_limiter.clear_all()
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_websocket_rate_limiting(
     test_user: User,
     test_token: str,
@@ -229,7 +212,8 @@ async def test_websocket_rate_limiting(
         await rate_limiter.clear_all()  # Clean up rate limit data
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_websocket_authentication(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -246,7 +230,8 @@ async def test_websocket_authentication(
     assert "Invalid token" in str(exc_info.value.rcvd.reason)
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_websocket_disconnect_cleanup(
     test_user: User,
     test_token: str,
@@ -274,47 +259,16 @@ async def test_websocket_disconnect_cleanup(
         ip_address="127.0.0.1"
     ) == (True, None)
 
-async def connect_websocket(token: str, client_id: str = None) -> websockets.WebSocketClientProtocol:
-    """Helper function to connect to WebSocket with authentication."""
-    if client_id is None:
-        client_id = str(uuid.uuid4())
-    
-    ws_uri = f"{WS_BASE_URL}?token={token}&client_id={client_id}"
-    logger.debug(f"Attempting to connect to WebSocket at {ws_uri}")
-    
-    try:
-        ws = await websockets.connect(
-            ws_uri,
-            ping_interval=20,
-            ping_timeout=20,
-            close_timeout=20
-        )
-        return ws
-    except Exception as e:
-        logger.error(f"Unexpected error connecting to WebSocket: {e}")
-        raise
-
 @pytest.mark.asyncio
-@pytest.mark.real_service
-async def test_chat_message_streaming_old(test_user, test_settings, websocket_manager, rate_limiter):
+@pytest.mark.real_websocket
+@pytest.mark.db_test
+async def test_chat_message_streaming_old(test_user, test_settings, websocket_helper: WebSocketTestHelper, websocket_manager, rate_limiter):
     """Test streaming response from a chat message using async websockets."""
-    # Create access token using the test user's UUID
-    access_token_expires = timedelta(minutes=test_settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    auth_token = create_access_token(
-        data={"sub": str(test_user.id)},
-        expires_delta=access_token_expires,
-        settings=test_settings
-    )
-
     client_id = str(uuid.uuid4())
-    ws_base_url = WS_BASE_URL
-    uri = f"{ws_base_url}?token={auth_token}&client_id={client_id}"
-    logger.debug(f"WebSocket URI: {uri}")
     ws = None
-    
     try:
-        # Connect with timeout and error handling
-        ws = await connect_websocket(auth_token)
+        # Connect using websocket_helper
+        ws = await websocket_helper.connect(client_id=client_id)
         assert ws is not None, "WebSocket connection failed"
         
         # Send a test message
@@ -323,8 +277,7 @@ async def test_chat_message_streaming_old(test_user, test_settings, websocket_ma
             "content": "What is the capital of France?",  # Simple factual question
             "metadata": {}
         }
-        logger.debug(f"Sending test message: {test_message}")
-        await ws.send(json.dumps(test_message))
+        await websocket_helper.send_message(client_id, test_message)
         
         # Track what we've received
         got_stream_start = False
@@ -335,27 +288,20 @@ async def test_chat_message_streaming_old(test_user, test_settings, websocket_ma
         # Keep receiving messages until we get stream_end or timeout
         try:
             while True:
-                logger.debug("Waiting for next message")
-                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=MESSAGE_TIMEOUT))
-                logger.debug(f"Received message: {msg}")
-                
+                msg = await websocket_helper.receive_message(client_id, timeout=10)
                 if msg["type"] == "stream_start":
                     got_stream_start = True
                     continue
-                    
                 if msg["type"] == "stream":
                     got_stream_content = True
                     received_content.append(msg["content"])
                     continue
-                    
                 if msg["type"] == "stream_end":
                     got_stream_end = True
                     break
-                    
         except asyncio.TimeoutError:
-            logger.error("Timeout waiting for stream_end")
             raise
-            
+        
         # Verify we got all message types
         assert got_stream_start, "Did not receive stream_start"
         assert got_stream_content, "Did not receive any stream content"
@@ -367,12 +313,13 @@ async def test_chat_message_streaming_old(test_user, test_settings, websocket_ma
         
     finally:
         if ws:
-            await ws.close()
+            await websocket_helper.disconnect(client_id)
         await websocket_manager.clear_all_connections()
         await rate_limiter.clear_all()
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_websocket_streaming_chat(
     test_user: User,
     test_token: str,
@@ -406,7 +353,8 @@ async def test_websocket_streaming_chat(
         await rate_limiter.clear_all()  # Clean up rate limit data 
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_message_send_receive(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -433,7 +381,8 @@ async def test_message_send_receive(
     await websocket_helper.disconnect(ws2.client_id)
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_message_broadcast(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -463,7 +412,8 @@ async def test_message_broadcast(
         await websocket_helper.disconnect(client.client_id)
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_message_validation(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -494,7 +444,8 @@ async def test_message_validation(
     await websocket_helper.disconnect()
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_message_order(
     test_user: User,
     websocket_helper: WebSocketTestHelper,
@@ -525,7 +476,8 @@ async def test_message_order(
     await websocket_helper.disconnect(ws2.client_id)
 
 @pytest.mark.asyncio
-@pytest.mark.real_service
+@pytest.mark.real_websocket
+@pytest.mark.db_test
 async def test_client_disconnect_handling(
     test_user: User,
     websocket_helper: WebSocketTestHelper,

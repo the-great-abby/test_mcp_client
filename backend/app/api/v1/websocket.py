@@ -19,7 +19,7 @@ from app.core.websocket import WebSocketManager, ChatMessage
 from app.models import User
 from app.core.redis import get_redis, RedisClient
 from app.core.websocket_rate_limiter import WebSocketRateLimiter
-from app.core.errors import WebSocketError, AuthenticationError, RateLimitExceeded
+from app.core.errors import RateLimitExceeded
 from app.db.session import get_db
 from websockets.exceptions import ConnectionClosed
 from websockets.frames import Close

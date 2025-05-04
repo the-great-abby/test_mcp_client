@@ -7,6 +7,7 @@ import logging
 from fastapi import Depends, HTTPException, status, WebSocket
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
+from jose.exceptions import ExpiredSignatureError
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
@@ -25,16 +26,32 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 async def verify_token(token: str) -> Optional[Dict[str, Any]]:
     """Verify JWT token."""
+    logger.debug(f"[verify_token] Verifying token: {token}")
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     try:
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )
+        logger.debug(f"[verify_token] Decoded payload: {payload}")
         token_data = TokenPayload(**payload)
-        if datetime.fromtimestamp(token_data.exp, UTC) < datetime.now(UTC):
-            return None
+        if token_data.sub is None:
+            logger.error("[verify_token] Token missing 'sub' claim.")
+            raise credentials_exception
         return payload
-    except (jwt.JWTError, ValidationError):
-        return None
+    except ExpiredSignatureError:
+        logger.error("[verify_token] Token has expired.")
+        raise HTTPException(
+            status_code=401,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except (jwt.JWTError, ValidationError) as e:
+        logger.error(f"[verify_token] JWTError or ValidationError: {e}")
+        raise credentials_exception
 
 async def get_current_user_from_token(
     token: str = Depends(oauth2_scheme),
@@ -53,6 +70,13 @@ async def get_current_user_from_token(
     
     user_id: str = payload.get("sub")
     if not user_id:
+        raise credentials_exception
+    
+    # Validate UUID format before querying DB
+    try:
+        from uuid import UUID
+        UUID(user_id)
+    except Exception:
         raise credentials_exception
     
     user = await db.get(User, user_id)
