@@ -7,9 +7,9 @@ from httpx import AsyncClient
 @pytest.fixture
 async def async_redis_client():
     """Create a mock async Redis client for async tests."""
-    from tests.helpers import MockRedis
-    print(f"[DEBUG] Using MockRedis from: {MockRedis.__module__} at {MockRedis}")
-    return MockRedis()
+    client = MockRedis()
+    yield client
+    await client.flushdb()
 
 @pytest.fixture
 async def websocket_manager(async_redis_client):
@@ -32,8 +32,8 @@ async def override_redis_dependency(async_redis_client):
     fastapi_app.dependency_overrides.pop(get_redis, None)
 
 @pytest.fixture
-async def app():
-    """Fixture to provide the FastAPI app instance for async tests."""
+def app():
+    """FastAPI app fixture for async tests."""
     return fastapi_app
 
 @pytest.fixture

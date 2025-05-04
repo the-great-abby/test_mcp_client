@@ -1,0 +1,106 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Test Organization and Path Resolution
+
+- **Test Directory Structure**
+  ```
+  tests/
+  ├── async/           # Async-specific tests
+  ├── integration/     # Integration tests
+  ├── unit/           # Unit tests
+  ├── mocks/          # Mock objects and fixtures
+  └── __pycache__/    # Python cache directory
+  ```
+
+- **Path Resolution in Docker**
+  - **Container Working Directory**
+    ```python
+    # ✅ DO: Use paths relative to /app in container
+    "tests/async/test_websocket.py"
+    "tests/integration/test_cache.py"
+    
+    # ❌ DON'T: Include app/ or backend/ prefixes
+    "app/tests/async/test_websocket.py"     # Wrong!
+    "backend/tests/integration/test_cache.py"  # Wrong!
+    ```
+
+  - **Test Discovery**
+    - Tests are run from `/app` directory in container
+    - `pytest.ini` configures `testpaths = tests`
+    - All test files should be discoverable from this path
+
+- **Test Execution**
+  - **Running Specific Tests**
+    ```bash
+    # ✅ Correct: Use AI-optimized targets with paths from /app
+    make -f Makefile.ai ai-test PYTEST_ARGS="tests/async/test_websocket.py::test_rate_limiting"
+    
+    # ❌ Incorrect: Wrong path or non-AI target
+    make test PYTEST_ARGS="app/tests/async/test_websocket.py::test_rate_limiting"
+    make test PYTEST_ARGS="backend/tests/async/test_websocket.py::test_rate_limiting"
+    ```
+
+  - **Test Categories**
+    - Async tests: `tests/async/`
+      - WebSocket tests
+      - Rate limiting tests
+      - Cache operations
+    - Integration tests: `tests/integration/`
+      - API endpoints
+      - Database operations
+    - Unit tests: `tests/unit/`
+      - Individual components
+      - Utility functions
+
+- **Coverage Requirements**
+  - **Minimum Coverage**
+    - Required: 80% total coverage
+    - Current: ~43% (needs improvement)
+    ```bash
+    # Check current coverage
+    make -f Makefile.ai ai-coverage
+    
+    # Get detailed coverage report
+    make -f Makefile.ai ai-coverage-report
+    ```
+  
+  - **Coverage Failures**
+    - Symptom: "Coverage failure: total of XX is less than fail-under=80"
+    - Solution: 
+      1. Run with coverage report
+      2. Identify untested code
+      3. Add missing tests
+      4. Rerun with coverage
+
+- **Common Issues**
+  - **Path Resolution**
+    - Symptom: "No tests collected" or "file not found"
+    - Cause: Including `app/` or `backend/` in path
+    - Solution: Use paths relative to `/app`
+
+  - **Test Selection**
+    - Symptom: All tests deselected
+    - Cause: Incorrect test path or pattern
+    - Solution: Verify path relative to `/app`
+
+  - **Coverage Failures**
+    - Symptom: Test passes but coverage fails
+    - Cause: Insufficient test coverage
+    - Solution: Add more test cases
+
+- **Best Practices**
+  - ✅ DO: Use AI-optimized Makefile targets
+  - ✅ DO: Use paths relative to `/app`
+  - ✅ DO: Follow test category organization
+  - ✅ DO: Monitor coverage metrics
+  - ❌ DON'T: Include app/ or backend/ prefixes
+  - ❌ DON'T: Mix test categories
+  - ❌ DON'T: Ignore coverage requirements
+
+- **References**
+  - [makefile_ai.mdc](mdc:.cursor/rules/makefile_ai.mdc) for AI-optimized targets
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) for execution guidelines
+  - [environments.mdc](mdc:.cursor/rules/environments.mdc) for environment setup

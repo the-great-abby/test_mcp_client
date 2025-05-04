@@ -37,4 +37,14 @@ asyncio.run(setup_db())
 
 # Start the application
 echo "Starting the application..."
-exec "$@" 
+if [ "$1" = "uvicorn" ]; then
+    if [ "$UVICORN_RELOAD" = "false" ]; then
+        echo "Starting without reload..."
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level debug
+    else
+        echo "Starting with reload..."
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+    fi
+else
+    exec "$@"
+fi 

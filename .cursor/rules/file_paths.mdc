@@ -111,4 +111,27 @@ alwaysApply: false
   
   # ❌ DON'T: Use string concatenation
   config_path = "config" + "/" + "settings.json"  # Can fail on Windows
-  ``` 
+  ```
+
+# Test Utility Import Path Rule
+
+- **Context:**
+  In the test container, the `backend` directory is not part of the Python import path. The root for imports is the `tests` directory.
+
+- **Rule:**
+  - **DO:** Use imports like `from tests.utils.real_websocket_client import RealWebSocketClient` for test utilities and fixtures.
+  - **DON'T:** Use `from backend.tests.utils...` or relative imports that cross directories.
+  - **Rationale:** This ensures compatibility with the test container's `PYTHONPATH` and avoids `ModuleNotFoundError`.
+
+- **Example:**
+  ```python
+  # ✅ Correct
+  from tests.utils.real_websocket_client import RealWebSocketClient
+
+  # ❌ Incorrect
+  from backend.tests.utils.real_websocket_client import RealWebSocketClient
+  from .real_websocket_client import RealWebSocketClient  # (if not in the same directory)
+  ```
+
+- **Common Error:**
+  If you see `ModuleNotFoundError: No module named 'backend.tests.utils'`, check your import paths. 

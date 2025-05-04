@@ -22,6 +22,7 @@ def clean_logging():
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
+@pytest.mark.mock_service
 @pytest.mark.parametrize("log_level", ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
 def test_valid_log_levels(log_level: LogLevel, clean_logging):
     """Test that valid log levels are properly set"""
@@ -33,6 +34,7 @@ def test_valid_log_levels(log_level: LogLevel, clean_logging):
     assert root_logger.level == getattr(logging, log_level)
     assert app_logger.level == getattr(logging, log_level)
 
+@pytest.mark.mock_service
 def test_invalid_log_level_defaults_to_info(clean_logging):
     """Test that invalid log levels default to INFO"""
     os.environ["LOG_LEVEL"] = "INVALID"
@@ -43,6 +45,7 @@ def test_invalid_log_level_defaults_to_info(clean_logging):
     assert root_logger.level == logging.INFO
     assert app_logger.level == logging.INFO
 
+@pytest.mark.mock_service
 def test_lowercase_log_level(clean_logging):
     """Test that lowercase log levels are converted to uppercase"""
     os.environ["LOG_LEVEL"] = "debug"
@@ -53,6 +56,7 @@ def test_lowercase_log_level(clean_logging):
     assert root_logger.level == logging.DEBUG
     assert app_logger.level == logging.DEBUG
 
+@pytest.mark.mock_service
 def test_json_log_format(capture_logs, clean_logging):
     """Test that logs are properly formatted as JSON"""
     setup_logging(output_stream=capture_logs)
@@ -71,6 +75,7 @@ def test_json_log_format(capture_logs, clean_logging):
     assert log_entry["module"] == "test_logging"
     assert log_entry["function"] == "test_json_log_format"
 
+@pytest.mark.mock_service
 def test_request_id_logging(clean_logging):
     """Test that request_id is included when present"""
     setup_logging()
@@ -94,6 +99,7 @@ def test_request_id_logging(clean_logging):
     
     assert log_entry["request_id"] == "test-123"
 
+@pytest.mark.mock_service
 def test_exception_logging(capture_logs, clean_logging):
     """Test that exceptions are properly logged"""
     setup_logging(output_stream=capture_logs)
@@ -112,6 +118,7 @@ def test_exception_logging(capture_logs, clean_logging):
     assert "exception" in log_entry
     assert "ValueError: Test error" in log_entry["exception"]
 
+@pytest.mark.mock_service
 def test_third_party_logger_levels(clean_logging):
     """Test that third-party loggers are set to WARNING level"""
     setup_logging()

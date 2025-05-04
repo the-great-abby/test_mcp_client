@@ -3,6 +3,19 @@ import os
 from pydantic_settings import BaseSettings
 from pydantic import validator, AnyHttpUrl, Field, ConfigDict
 from pydantic.networks import PostgresDsn
+from functools import lru_cache
+from pathlib import Path
+from dotenv import load_dotenv
+import logging
+import secrets
+from zoneinfo import ZoneInfo
+
+# Load environment variables from .env file if it exists
+env_path = Path(__file__).parent.parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(env_path)
+
+UTC = ZoneInfo("UTC")
 
 class Settings(BaseSettings):
     model_config = ConfigDict(env_file=".env", case_sensitive=True, extra="allow")
@@ -23,6 +36,7 @@ class Settings(BaseSettings):
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "test_mcp_chat")
     POSTGRES_USER: str = os.getenv("POSTGRES_USER", "postgres")
     POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "postgres")
+    SQL_ECHO: bool = False
     
     @validator("POSTGRES_PORT", pre=True)
     def validate_postgres_port(cls, v: Union[str, int]) -> int:
@@ -93,6 +107,7 @@ class Settings(BaseSettings):
     REDIS_MAX_CONNECTIONS: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "10"))
     REDIS_TIMEOUT: int = int(os.getenv("REDIS_TIMEOUT", "5"))
     REDIS_PASSWORD: Optional[str] = os.getenv("REDIS_PASSWORD")
+    REDIS_SSL: bool = os.getenv("REDIS_SSL", "false").lower() == "true"
     
     @property
     def REDIS_URI(self) -> str:
@@ -142,7 +157,7 @@ class Settings(BaseSettings):
     WS_PING_TIMEOUT: float = 20.0  # Seconds
     WS_CLOSE_TIMEOUT: float = 20.0  # Seconds
     WS_MAX_HISTORY_SIZE: int = 100
-    WS_RATE_LIMIT: int = 60
+    WS_MAX_MESSAGES_PER_SECOND: int = 60  # Maximum messages per second per user
     WS_MAX_MESSAGE_LENGTH: int = 4096  # Maximum length of a chat message
     
     # API settings
@@ -153,4 +168,10 @@ class Settings(BaseSettings):
         "http://localhost:3000"  # React frontend
     ]
 
-settings = Settings() 
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
+
+# Create global settings instance
+settings = get_settings() 

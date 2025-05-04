@@ -11,6 +11,33 @@ alwaysApply: true
   - Environment management for testing
   - AI-assisted testing workflows
 
+- **Test Setup Process**
+  - **Database Initialization**
+    ```bash
+    # Initialize test environment and database
+    make test-setup  # Standard setup
+    # OR
+    make -f Makefile.ai test-setup  # AI-optimized setup with JSON output
+    ```
+    This will:
+    1. Terminate existing database connections
+    2. Drop test database if it exists
+    3. Create fresh test database
+    4. Initialize schema using SQLAlchemy models:
+       - users
+       - conversations
+       - messages
+       - contexts
+       - health_checks
+
+  - **Environment Preparation**
+    - Starts required Docker services:
+      - backend-test (FastAPI application)
+      - db-test (PostgreSQL)
+      - redis-test (Redis)
+    - Verifies service health
+    - Sets up test network isolation
+
 - **Makefile.ai Usage**
   - **When to Use**
     - During active test-debug cycles
@@ -21,22 +48,28 @@ alwaysApply: true
   - **Common Commands**
     ```makefile
     # Run all tests with AI optimization
-    make ai-test
+    make -f Makefile.ai ai-test
 
-    # Run specific test suite
-    make ai-test-suite SUITE=auth
+    # Run specific test types
+    make -f Makefile.ai ai-test-websocket  # WebSocket tests
+    make -f Makefile.ai ai-test-unit       # Unit tests
+    make -f Makefile.ai ai-test-integration # Integration tests
+    make -f Makefile.ai ai-test-coverage    # Coverage report
 
-    # Clean and rebuild test environment
-    make ai-test-clean
+    # Environment management
+    make -f Makefile.ai ai-test-clean      # Clean test environment
+    make -f Makefile.ai ai-up-test         # Start test containers
+    make -f Makefile.ai ai-test-stop       # Stop test containers
     ```
 
 - **Testing Workflow Patterns**
   - **Test-Debug Cycle**
-    1. Run initial test suite
-    2. Analyze failures with AI assistance
-    3. Apply fixes using AI suggestions
-    4. Rerun affected tests
-    5. Verify fixes and coverage
+    1. Set up test environment: `make -f Makefile.ai test-setup`
+    2. Run initial test suite: `make -f Makefile.ai ai-test`
+    3. Analyze failures with AI assistance
+    4. Apply fixes using AI suggestions
+    5. Rerun affected tests
+    6. Verify fixes and coverage
 
   - **Environment Management**
     - Clean environment between major changes
@@ -49,25 +82,29 @@ alwaysApply: true
   - ✅ DO: Clean environment between test runs
   - ✅ DO: Follow the test-debug-retest pattern
   - ✅ DO: Leverage AI optimization features
+  - ✅ DO: Always start with fresh test setup
   - ❌ DON'T: Skip environment cleanup
   - ❌ DON'T: Mix test and development environments
   - ❌ DON'T: Ignore AI suggestions
   - ❌ DON'T: Reuse contaminated test states
+  - ❌ DON'T: Run pytest directly (use Makefile targets)
 
 - **Examples**
   ```bash
-  # Good: Clean test cycle
-  $ make ai-test-clean
-  $ make ai-test
-  $ make ai-test-suite SUITE=auth
+  # ✅ Good: Clean test cycle
+  $ make -f Makefile.ai test-setup
+  $ make -f Makefile.ai ai-test-websocket
+  $ make -f Makefile.ai ai-test-coverage
 
-  # Bad: Mixing environments
+  # ❌ Bad: Mixing environments
+  $ pytest
   $ python -m pytest
-  $ make ai-test
   $ npm test
   ```
 
 - **References**
+  - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) for pytest guidelines
+  - [testing_docker.mdc](mdc:.cursor/rules/testing_docker.mdc) for Docker test setup
+  - [database_migrations.mdc](mdc:.cursor/rules/database_migrations.mdc) for schema management
   - [meta.mdc](mdc:.cursor/rules/meta.mdc) for rule structure
   - [terminal.mdc](mdc:.cursor/rules/terminal.mdc) for terminal management
-  - Makefile.ai documentation for command details

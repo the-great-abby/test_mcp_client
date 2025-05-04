@@ -1,4 +1,4 @@
-.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean
+.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean open-backend-coverage
 
 # Development commands
 dev:
@@ -115,6 +115,16 @@ test-async: test-setup
 test-async-logs:
 	@docker-compose -f docker-compose.test.yml logs -f backend-test | tee test-async.log
 
+test-unit-dir: test-setup
+	@echo "🧪 Running unit tests (directory)..."
+	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest tests/unit || (echo "❌ Unit tests failed" && exit 1)
+	@echo "✅ Unit tests completed successfully"
+
+test-integration-dir: test-setup
+	@echo "🧪 Running integration tests (directory)..."
+	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest tests/integration || (echo "❌ Integration tests failed" && exit 1)
+	@echo "✅ Integration tests completed successfully"
+
 # Show help
 help:
 	@echo "Available commands:"
@@ -155,6 +165,10 @@ pycache-clean:
 	@find . -type d -name '__pycache__' -exec rm -rf {} +
 	@find . -type f -name '*.pyc' -delete
 	@echo "✅ Python cache cleanup complete."
+
+# Open backend coverage report in browser (macOS)
+open-backend-coverage:
+	make -f Makefile.ai -C backend ai-open-coverage
 
 .DEFAULT_GOAL := dev 
 

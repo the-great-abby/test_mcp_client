@@ -1,8 +1,9 @@
 import asyncio
 import websockets
+from tests.conftest import test_settings
 
 async def test_websocket():
-    uri = "ws://backend-test:8000/api/v1/ws"
+    uri = f"ws://{test_settings.MCP_HOST}:{test_settings.MCP_PORT}/api/v1/ws"
     try:
         async with websockets.connect(uri) as websocket:
             print("Connected to websocket")

@@ -24,4 +24,7 @@ def get_client_ip(websocket: WebSocket) -> Optional[str]:
         return forwarded_for.split(",")[0].strip()
         
     # Fallback to direct client address
+    # Handle both dict and ClientInfo namedtuple
+    if isinstance(client, dict):
+        return client.get("host")
     return client.host 

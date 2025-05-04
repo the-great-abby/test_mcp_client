@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements-test.txt
 RUN pip install pytest pytest-asyncio pytest-cov
 
 # Set PYTHONPATH for module imports
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/backend
 
 # Copy application code
 COPY . /app/
@@ -34,8 +34,8 @@ EXPOSE 8000
 # Set the entrypoint script
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 
-# Command to run the server in development mode with reload
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Command to run the server in development mode
+CMD ["uvicorn"]
 
 ### Production stage ###
 FROM python:3.11-slim as production

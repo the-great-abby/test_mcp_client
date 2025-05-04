@@ -3,8 +3,63 @@ description:
 globs: 
 alwaysApply: true
 ---
+# Cursor Rules Index
+
+- **Overview**
+  - Central reference for all project rules and guidelines
+  - Each rule focuses on specific aspects of development
+  - Rules are organized by category for easy reference
+  - All rules follow consistent formatting and structure
+
+- **Rule Categories**
+  - **Memory and State Management**
+    - [memory_server.mdc](mdc:.cursor/rules/memory_server.mdc) - Memory server configuration and usage
+      - Use when:
+        - Maintaining conversation context across sessions
+        - Storing user preferences and behaviors
+        - Building knowledge graphs about projects or domains
+        - Implementing AI agents with persistent memory
+        - Managing long-term state in AI interactions
+      - Key features:
+        - Persistent Docker volume storage
+        - Entity-relation knowledge graph
+        - Observation-based fact storage
+        - Semantic search capabilities
+
+  - **Testing & Quality**
+    - [test_services.mdc](mdc:.cursor/rules/test_services.mdc) - Service mocking and testing patterns
+    - [test_execution.mdc](mdc:.cursor/rules/test_execution.mdc) - Test organization and execution guidelines
+    - [pytest_execution.mdc](mdc:.cursor/rules/pytest_execution.mdc) - Pytest execution guidelines
+    - [testing.mdc](mdc:.cursor/rules/testing.mdc) - General testing standards
+    - [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc) - Test workflow patterns
+    - [websocket_testing.mdc](mdc:.cursor/rules/websocket_testing.mdc) - WebSocket test patterns
+    - [websocket_message_sequence.mdc](mdc:.cursor/rules/websocket_message_sequence.mdc) - WebSocket message testing
+    - [websocket_rate_limit_test.mdc](mdc:.cursor/rules/websocket_rate_limit_test.mdc) - Rate limit testing
+
+  - **Infrastructure**
+    - [docker.mdc](mdc:.cursor/rules/docker.mdc) - Docker configuration and usage
+    - [environments.mdc](mdc:.cursor/rules/environments.mdc) - Environment management
+    - [file_paths.mdc](mdc:.cursor/rules/file_paths.mdc) - File organization standards
+
+  - **Development**
+    - [test_organization.mdc](mdc:.cursor/rules/test_organization.mdc) - Test code organization
+    - [core_business_logic.mdc](mdc:.cursor/rules/core_business_logic.mdc) - Core backend business logic files to prioritize for testing and coverage
+    - [terminal.mdc](mdc:.cursor/rules/terminal.mdc) - Terminal operations
+    - [meta.mdc](mdc:.cursor/rules/meta.mdc) - Rule maintenance guidelines
+    - [rule_template.mdc](mdc:.cursor/rules/rule_template.mdc) - Template for creating new rules
+
+- **Creating New Rules**
+  1. Start with the template:
+     ```bash
+     cp .cursor/rules/rule_template.mdc .cursor/rules/my_new_rule.mdc
+     ```
+  2. Fill in each section of the template
+  3. Add concrete examples from the codebase
+  4. Add the rule to the appropriate category in this index
+  5. Update references in related rules
+
 - **Required Rule Structure**
-  - Every rule must start with YAML frontmatter containing:
+  - Every rule must start with YAML frontmatter:
     ```markdown
     ---
     description: Clear, one-line description
@@ -12,12 +67,11 @@ alwaysApply: true
     alwaysApply: boolean
     ---
     ```
-  - Main content should use bullet points with bold headers
 
 - **File References**
-  - Use `[filename](mdc:path/to/file)` syntax for all file references
-  - Example: [schema.prisma](mdc:prisma/schema.prisma)
+  - Use `[filename](mdc:path/to/file)` syntax
   - Always use relative paths from workspace root
+  - Example: [schema.prisma](mdc:prisma/schema.prisma)
 
 - **Code Examples**
   ```typescript
@@ -39,31 +93,29 @@ alwaysApply: true
   - Keep rules DRY by referencing other rules
 
 - **Rule Creation/Maintenance**
-  - Due to a known Cursor bug, new or updated rules should first be saved as a plain text file (e.g., `NEWRULE.txt`) in the project root.
-  - Once the rule content is finalized, move or copy the text file to the appropriate location in `.cursor/rules/` and rename it with a `.mdc` extension.
-  - This ensures Cursor recognizes the rule update and avoids caching issues.
-
-  **Example Workflow:**
-  ```bash
-  # 1. Save your rule as NEWRULE.txt in the project root
-  # 2. Move it to the rules directory with the correct name
-  mv NEWRULE.txt .cursor/rules/my_new_rule.mdc
-  ```
-
-- **Rule Maintenance**
-  - Update rules when new patterns emerge
-  - Add examples from actual codebase
-  - Remove outdated patterns
-  - Cross-reference related rules
+  - Save new rules as plain text first (e.g., `NEWRULE.txt`)
+  - Move to `.cursor/rules/` with `.mdc` extension
+  - Update this index when adding new rules
+  - Example workflow:
+    ```bash
+    # 1. Save rule as NEWRULE.txt in project root
+    # 2. Move to rules directory with .mdc extension
+    mv NEWRULE.txt .cursor/rules/my_new_rule.mdc
+    # 3. Update cursor_rules.mdc to include new rule
+    ```
 
 - **Best Practices**
   - Use bullet points for clarity
   - Keep descriptions concise
   - Include both DO and DON'T examples
   - Reference actual code over theoretical examples
-  - Use consistent formatting across rules 
-  - Use bullet points for clarity
-  - Keep descriptions concise
-  - Include both DO and DON'T examples
-  - Reference actual code over theoretical examples
-  - Use consistent formatting across rules 
+  - Use consistent formatting across rules
+  - Always link new rules in this index
+  - Maintain rule categorization
+  - Update references when moving/renaming rules
+
+- **Rule Application**
+  - Rules are automatically applied based on file patterns
+  - Multiple rules may apply to the same file
+  - More specific rules take precedence
+  - `alwaysApply: true` rules are checked for all files 

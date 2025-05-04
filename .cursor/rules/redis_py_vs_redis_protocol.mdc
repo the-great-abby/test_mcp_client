@@ -1,0 +1,42 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Redis-py vs. Raw Redis Protocol: Return Value Differences
+
+- **Overview**
+  - The Python Redis client (`redis-py`) and the raw Redis protocol differ in return values for many commands.
+  - This is a common source of confusion when writing mocks, tests, or switching between direct Redis and redis-py.
+
+- **Key Differences**
+  - `set`:
+    - **redis-py:** Returns `True` for success, `False` for failure.
+    - **Raw Redis protocol:** Returns `OK` (as a string), or an error.
+  - `hset`, `lpush`, `rpush`, etc.:
+    - **redis-py:** Returns integer count/status (e.g., number of fields added, new length of list).
+    - **Raw Redis protocol:** Also returns integer, but semantics may differ slightly.
+  - `exists`, `delete`, etc.:
+    - Both return integer count of keys affected.
+
+- **Best Practices for Mocks/Tests**
+  - Always match the interface and return values of `redis-py` in Python code, not the raw Redis protocol.
+  - For `set`, return `True` for success, not `1`.
+  - For `hset`, `lpush`, etc., return integer as expected by `redis-py`.
+  - Document any intentional deviations in the mock or test code.
+
+- **References**
+  - [redis-py documentation](mdc:https:/redis-py.readthedocs.io/en/stable)
+  - [Redis command reference](mdc:https:/redis.io/commands)
+
+- **Example**
+  ```python
+  # redis-py
+  assert await redis.set("key", "value") is True  # not 1
+  assert await redis.hset("hash", "field", "val") == 1
+  ```
+
+- **Action Items**
+  - When writing or updating mocks, always check redis-py docs for expected return values.
+  - Add comments in code where return value semantics are important.
+

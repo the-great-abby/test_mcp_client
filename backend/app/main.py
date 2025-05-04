@@ -27,7 +27,7 @@ from app.core.errors import (
 )
 from pydantic import ValidationError as PydanticValidationError
 from app.core.websocket import WebSocketManager
-from app.core.redis import RedisClient
+from app.core.redis import get_redis_client
 from app.api.v1 import auth, users, conversations, messages, websocket, health
 
 # Set up logging
@@ -36,13 +36,6 @@ logger = logging.getLogger(__name__)
 
 # Valid log levels
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-
-# Define valid log levels and ensure proper format
-VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
-log_level = settings.LOG_LEVEL.upper() if isinstance(settings.LOG_LEVEL, str) else "INFO"
-if log_level not in VALID_LOG_LEVELS:
-    logger.warning(f"Invalid log level: {log_level}, defaulting to INFO")
-    log_level = "INFO"
 
 def create_app() -> FastAPI:
     """Create FastAPI application."""
@@ -114,14 +107,19 @@ def create_app() -> FastAPI:
     # Include API routers
     app.include_router(api_router)
 
-    # Initialize WebSocket manager with Redis client
-    redis_client = RedisClient(settings.REDIS_URI)
-    manager = WebSocketManager(redis_client=redis_client)
-
-    # Store dependencies in app state
+    # Store settings in app state
     app.state.settings = settings
-    app.state.redis_client = redis_client
-    app.state.websocket_manager = manager
+
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize async resources on startup."""
+        # Initialize Redis client
+        app.state.redis = await get_redis_client()
+        
+        # Test Redis connection
+        if not await app.state.redis.ping():
+            logger.error("Failed to connect to Redis")
+            raise RuntimeError("Failed to connect to Redis")
 
     return app
 

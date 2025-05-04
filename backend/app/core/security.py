@@ -1,8 +1,8 @@
 """
 Security utilities for authentication and authorization.
 """
-from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from datetime import datetime, timedelta, UTC
+from typing import Any, Dict, Optional, Union
 from passlib.context import CryptContext
 import jwt
 from fastapi import Depends, HTTPException, status, WebSocket
@@ -11,8 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.errors import NotFoundError
-from app.db.session import get_async_session as get_db
+from app.db.session import get_db
 from app.models import User
+import logging
+import bcrypt
+
+logger = logging.getLogger(__name__)
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -26,20 +30,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Get password hash."""
-    return pwd_context.hash(password)
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode(), salt).decode()
 
 def create_access_token(
-    subject: Union[str, Any], expires_delta: timedelta = None
+    subject: Union[str, Any], expires_delta: Optional[timedelta] = None
 ) -> str:
     """Create access token."""
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = datetime.now(UTC) + timedelta(
             minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     to_encode = {"exp": expire, "sub": str(subject)}
-    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
     return encoded_jwt
 
 def decode_token(token: str) -> dict:
