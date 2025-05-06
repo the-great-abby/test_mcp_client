@@ -46,6 +46,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     curl \
     netcat-traditional \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements (production only)

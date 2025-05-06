@@ -84,7 +84,7 @@ class WebSocketTestHelper:
                 client_id=client_id,
                 user_id=user_id,
                 ip_address=self.test_ip,
-                query_params={"token": auth_token} if auth_token and ws_token_query else {}
+                query_params={"token": auth_token} if auth_token else {}
             )
             logger.debug(f"[WebSocketTestHelper] After MockWebSocket __init__: client_id={client_id} state={ws.client_state}")
             try:

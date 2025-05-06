@@ -3,6 +3,21 @@ description:
 globs:
 alwaysApply: false
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 # Core Business Logic Files (Backend)
 
 This rule documents which files and modules are considered core business logic for the backend project. These files should be prioritized for testing, code review, and coverage.

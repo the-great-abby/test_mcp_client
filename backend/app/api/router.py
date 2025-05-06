@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import websocket, health, auth, users, conversations, messages
+from app.api.v1 import websocket, health, auth, users, conversations, messages, admin
 from app.core.config import settings
 
 router = APIRouter()
@@ -30,6 +30,12 @@ router.include_router(
     messages.router,
     prefix=f"{settings.API_V1_STR}/messages",
     tags=["messages"]
+)
+
+router.include_router(
+    admin.router,
+    prefix=f"{settings.API_V1_STR}/admin",
+    tags=["admin"]
 )
 
 # Include health check routes

@@ -1,4 +1,4 @@
-.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean open-backend-coverage
+.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean open-backend-coverage add-task defer-task list-deferred-tasks next-task set-task-done backend-test-shell backend-shell migrate-dev set-task-status pytest-integration-admin admin-ui-build admin-ui-up admin-ui-down admin-ui-clean sveltekit-init ai-admin-ui-build ai-admin-ui-up ai-admin-ui-down ai-admin-ui-clean admin-ui-install ai-admin-ui-install admin-ui-dev-build admin-ui-dev-up admin-ui-dev-down ai-admin-ui-dev-build ai-admin-ui-dev-up ai-admin-ui-dev-down admin-ui-clean-deps ai-admin-ui-clean-deps
 
 # Development commands
 dev:
@@ -23,6 +23,10 @@ logs:
 test-logs:
 	docker-compose -f docker-compose.test.yml logs -f
 
+# Set default compose file and service for migrations
+COMPOSE_FILE ?= docker-compose.dev.yml
+SERVICE ?= backend
+
 # Alembic setup
 alembic-setup:
 	@echo "🔧 Setting up Alembic directories..."
@@ -31,38 +35,50 @@ alembic-setup:
 	@echo "✅ Alembic setup complete"
 
 # Database commands
+# Usage:
+#   make migrate-init [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
+#   make migrate-init COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate-init: alembic-setup
-	docker-compose -f docker-compose.dev.yml exec \
+	docker-compose -f $(COMPOSE_FILE) exec \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=postgres \
 		-e POSTGRES_HOST=postgres \
 		-e POSTGRES_PORT=5432 \
 		-e POSTGRES_DB=mcp_chat \
 		-e PYTHONUNBUFFERED=1 \
-		backend alembic init alembic
+		$(SERVICE) alembic init alembic
 
+# Usage:
+#   make migrate [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
+#   make migrate COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate: alembic-setup
-	docker-compose -f docker-compose.dev.yml exec \
+	docker-compose -f $(COMPOSE_FILE) exec \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=postgres \
 		-e POSTGRES_HOST=postgres \
 		-e POSTGRES_PORT=5432 \
 		-e POSTGRES_DB=mcp_chat \
 		-e PYTHONUNBUFFERED=1 \
-		backend alembic upgrade head
+		$(SERVICE) alembic upgrade head
 
+# Usage:
+#   make migrate-create name=desc [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
+#   make migrate-create name=desc COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate-create: alembic-setup
-	@docker-compose -f docker-compose.dev.yml exec -T backend python3 /app/scripts/create_migration.py "$(name)"
+	@docker-compose -f $(COMPOSE_FILE) exec -T $(SERVICE) python3 /app/scripts/create_migration.py "$(name)"
 
+# Usage:
+#   make migrate-rollback [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
+#   make migrate-rollback COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate-rollback: alembic-setup
-	docker-compose -f docker-compose.dev.yml exec \
+	docker-compose -f $(COMPOSE_FILE) exec \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=postgres \
 		-e POSTGRES_HOST=postgres \
 		-e POSTGRES_PORT=5432 \
 		-e POSTGRES_DB=mcp_chat \
 		-e PYTHONUNBUFFERED=1 \
-		backend alembic downgrade -1
+		$(SERVICE) alembic downgrade -1
 
 # Test commands
 test-setup:
@@ -169,6 +185,137 @@ pycache-clean:
 # Open backend coverage report in browser (macOS)
 open-backend-coverage:
 	make -f Makefile.ai -C backend ai-open-coverage
+
+# Task Master: Add a new task with a variable prompt and optional priority
+add-task:
+	@if [ -z "$(PROMPT)" ]; then \
+		echo "Please provide PROMPT, e.g., make add-task PROMPT='Describe your task here.'"; \
+		exit 1; \
+	fi; \
+	PRIORITY_ARG="--priority=$(if $(PRIORITY),$(PRIORITY),low)"; \
+	echo "Adding task with prompt: $(PROMPT) and priority: $${PRIORITY_ARG#--priority=}"; \
+	npx task-master add-task --prompt="$(PROMPT)" $$PRIORITY_ARG
+
+# Usage: make defer-task TASK_ID=<id>
+defer-task:
+	@if [ -z "$(TASK_ID)" ]; then \
+		echo "Please provide TASK_ID, e.g., make defer-task TASK_ID=15"; \
+		exit 1; \
+	fi; \
+	echo "Setting status of task $(TASK_ID) to deferred..."; \
+	npx task-master set-status --id=$(TASK_ID) --status=deferred
+
+list-deferred-tasks:
+	@echo "Listing all deferred/nice-to-have tasks..."
+	npx task-master list --status=deferred
+
+# Usage: make next-task
+next-task:
+	@echo "Showing the next eligible task to work on..."
+	npx task-master next
+
+# Usage: make set-task-done TASK_ID=<id>
+set-task-done:
+	@if [ -z "$(TASK_ID)" ]; then \
+		echo "Please provide TASK_ID, e.g., make set-task-done TASK_ID=20.1"; \
+		exit 1; \
+	fi; \
+	echo "Marking task $(TASK_ID) as done..."; \
+	npx task-master set-status --id=$(TASK_ID) --status=done
+
+# Open an interactive shell in backend-test (test environment)
+backend-test-shell:
+	docker-compose -f docker-compose.test.yml exec backend-test /bin/bash
+
+# Open an interactive shell in backend (dev environment)
+backend-shell:
+	docker-compose -f docker-compose.dev.yml exec backend /bin/bash
+
+# Apply Alembic migrations in the dev environment
+migrate-dev:
+	docker-compose -f docker-compose.dev.yml exec backend alembic upgrade head
+
+# Set the status of a task or subtask
+# Usage: make set-task-status TASK_ID=<id> STATUS=<status>
+set-task-status:
+	@if [ -z "$(TASK_ID)" ] || [ -z "$(STATUS)" ]; then \
+		echo "Please provide TASK_ID and STATUS, e.g., make set-task-status TASK_ID=20 STATUS=done"; \
+		exit 1; \
+	fi; \
+	echo "Setting status of task $(TASK_ID) to $(STATUS)..."; \
+	npx task-master set-status --id=$(TASK_ID) --status=$(STATUS)
+
+# Run only the admin integration tests
+pytest-integration-admin:
+	docker-compose -f docker-compose.test.yml exec backend-test pytest -vv tests/integration/test_admin.py
+
+# --- Admin UI (Svelte) ---
+admin-ui-build:
+	docker build -t admin-ui ./admin-ui
+
+admin-ui-up:
+	docker run --rm -d -p 5173:80 --name admin-ui admin-ui
+
+admin-ui-down:
+	docker stop admin-ui || true
+
+admin-ui-clean:
+	docker rmi admin-ui || true
+
+# --- AI-Friendly Admin UI (Svelte) Targets ---
+ai-admin-ui-build:
+	docker build -t admin-ui ./admin-ui
+
+ai-admin-ui-up:
+	docker run --rm -d -p 5173:80 --name admin-ui admin-ui
+
+ai-admin-ui-down:
+	docker stop admin-ui || true
+
+ai-admin-ui-clean:
+	docker rmi admin-ui || true
+
+# Usage: make sveltekit-init SITE=admin-ui
+sveltekit-init:
+	@if [ -z "$(SITE)" ]; then \
+		echo "Please provide SITE, e.g., make sveltekit-init SITE=admin-ui"; \
+		exit 1; \
+	fi; \
+	SV_TYPE=typescript npx --yes sv create $(SITE) --template minimal
+
+# Install dependencies for admin-ui (Svelte)
+admin-ui-install:
+	cd admin-ui && yarn install
+
+ai-admin-ui-install:
+	cd admin-ui && yarn install
+
+# --- Admin UI (Svelte) Dev Mode (Hot Reload) ---
+admin-ui-dev-build:
+	docker build -t admin-ui-dev -f admin-ui/Dockerfile --target dev ./admin-ui
+
+admin-ui-dev-up:
+	docker run --rm -it -p 5173:5173 -v $(PWD)/admin-ui:/app --name admin-ui-dev admin-ui-dev
+
+admin-ui-dev-down:
+	docker stop admin-ui-dev || true
+
+# --- AI-Friendly Dev Mode Targets ---
+ai-admin-ui-dev-build:
+	docker build -t admin-ui-dev -f admin-ui/Dockerfile --target dev ./admin-ui
+
+ai-admin-ui-dev-up:
+	docker run --rm -d -p 5173:5173 -v $(PWD)/admin-ui:/app --name admin-ui-dev admin-ui-dev
+
+ai-admin-ui-dev-down:
+	docker stop admin-ui-dev || true
+
+# Clean Svelte/node lockfiles and node_modules in admin-ui
+admin-ui-clean-deps:
+	rm -rf admin-ui/node_modules admin-ui/package-lock.json admin-ui/pnpm-lock.yaml admin-ui/yarn.lock
+
+ai-admin-ui-clean-deps:
+	rm -rf admin-ui/node_modules admin-ui/package-lock.json admin-ui/pnpm-lock.yaml admin-ui/yarn.lock
 
 .DEFAULT_GOAL := dev 
 

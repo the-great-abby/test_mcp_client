@@ -499,12 +499,10 @@ async def test_message_timeout_handling(ws_helper):
 async def test_reconnection_handling(ws_helper):
     """Test reconnection after disconnect."""
     client_id = str(uuid.uuid4())
-    
     # First connection
     ws = await ws_helper.connect(client_id=client_id)
     assert ws.client_state == WebSocketState.CONNECTED
     await ws_helper.disconnect(client_id)
-    
     # Reconnect
     ws = await ws_helper.connect(client_id=client_id)
     assert ws.client_state == WebSocketState.CONNECTED

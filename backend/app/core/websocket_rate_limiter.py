@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from redis.asyncio import Redis
 import asyncio
 import os
+from app.metrics import rate_limit_violations, backoff_active
 
 logger = logging.getLogger(__name__)
 UTC = ZoneInfo("UTC")
@@ -20,6 +21,10 @@ class WebSocketRateLimiter:
     # Redis key prefixes
     CONNECTION_COUNT_PREFIX = "ws:conn_count"
     MESSAGE_COUNT_PREFIX = "ws:msg_count"
+    
+    BASE_BACKOFF_SECONDS = 2
+    MAX_BACKOFF_SECONDS = 300  # 5 minutes
+    BACKOFF_RESET_SECONDS = 600  # 10 minutes of quiet resets violations
     
     def __init__(
         self,
@@ -34,7 +39,8 @@ class WebSocketRateLimiter:
         message_timeout: float = 5.0,
         max_messages_per_minute: Optional[int] = None,  # For backward compatibility
         max_messages_per_hour: Optional[int] = None,    # For backward compatibility
-        max_messages_per_day: Optional[int] = None      # For backward compatibility
+        max_messages_per_day: Optional[int] = None,     # For backward compatibility
+        client_type_limits: Optional[dict] = None,      # NEW
     ):
         """Initialize rate limiter.
         
@@ -51,6 +57,7 @@ class WebSocketRateLimiter:
             max_messages_per_minute: Alias for messages_per_minute (deprecated)
             max_messages_per_hour: Alias for messages_per_hour (deprecated)
             max_messages_per_day: Alias for messages_per_day (deprecated)
+            client_type_limits: Optional client type-specific rate limits
         """
         self.redis = redis
         self.max_connections = max_connections
@@ -63,6 +70,20 @@ class WebSocketRateLimiter:
         self.message_timeout = message_timeout
         self._connection_counts: Dict[str, int] = {}
         self._message_counts: Dict[str, Dict[str, int]] = {}
+        self.client_type_limits = client_type_limits or {
+            "authenticated": {
+                "second": self.max_messages_per_second,
+                "minute": self.messages_per_minute,
+                "hour": self.messages_per_hour,
+                "day": self.messages_per_day,
+            },
+            "anonymous": {
+                "second": max(1, self.max_messages_per_second // 2),
+                "minute": max(1, self.messages_per_minute // 4),
+                "hour": max(1, self.messages_per_hour // 4),
+                "day": max(1, self.messages_per_day // 4),
+            }
+        }
         
     def _get_connection_key(self, client_id: str, user_id: str, ip_address: str) -> str:
         """Get Redis key for connection tracking.
@@ -197,11 +218,52 @@ class WebSocketRateLimiter:
             print(f"[DEBUG] (no redis) After DECR: {conn_key}={self._connection_counts.get(conn_key, 0)}, {user_key}={self._connection_counts.get(user_key, 0)}")
             logger.debug(f"[RateLimiter] (no redis) After DECR: {conn_key}={self._connection_counts.get(conn_key, 0)}, {user_key}={self._connection_counts.get(user_key, 0)}")
                 
+    async def get_backoff_key(self, identifier: str) -> str:
+        return f"ws:backoff:{identifier}"
+
+    async def get_violation_key(self, identifier: str) -> str:
+        return f"ws:violations:{identifier}"
+
+    async def get_backoff(self, identifier: str) -> int:
+        key = await self.get_backoff_key(identifier)
+        if self.redis:
+            ttl = await self.redis.ttl(key)
+            return max(ttl, 0)
+        return 0
+
+    async def increment_violation(self, identifier: str) -> int:
+        key = await self.get_violation_key(identifier)
+        if self.redis:
+            count = await self.redis.incr(key)
+            await self.redis.expire(key, self.BACKOFF_RESET_SECONDS)
+            return int(count)
+        return 1
+
+    async def reset_violations(self, identifier: str):
+        key = await self.get_violation_key(identifier)
+        if self.redis:
+            await self.redis.delete(key)
+
+    async def set_backoff(self, identifier: str, seconds: int):
+        key = await self.get_backoff_key(identifier)
+        if self.redis:
+            await self.redis.set(key, "1", ex=seconds)
+
+    async def check_backoff(self, identifier: str) -> int:
+        return await self.get_backoff(identifier)
+
+    async def handle_rate_limit_violation(self, identifier: str) -> int:
+        violations = await self.increment_violation(identifier)
+        backoff = min(self.BASE_BACKOFF_SECONDS * (2 ** (violations - 1)), self.MAX_BACKOFF_SECONDS)
+        await self.set_backoff(identifier, backoff)
+        return backoff
+
     async def check_message_limit(
         self,
         client_id: str,
         user_id: str,
         ip_address: str,
+        client_type: str = "anonymous",
         is_system_message: bool = False
     ) -> Tuple[bool, Optional[str]]:
         """Check if message is allowed.
@@ -210,6 +272,7 @@ class WebSocketRateLimiter:
             client_id: Client ID
             user_id: User ID
             ip_address: IP address
+            client_type: Client type
             is_system_message: Whether this is a system message
             
         Returns:
@@ -220,12 +283,19 @@ class WebSocketRateLimiter:
         if is_system_message:
             return True, None
             
+        identifier = f"{user_id}:{ip_address}:{client_id}"
+        backoff = await self.check_backoff(identifier)
+        if backoff > 0:
+            return False, f"Rate limit exceeded. Please wait {backoff} seconds before retrying."
+            
         now = datetime.now(UTC)
+        # Use client_type-specific limits
+        limits = self.client_type_limits.get(client_type, self.client_type_limits["anonymous"])
         windows = {
-            "second": (1, self.max_messages_per_second),
-            "minute": (60, self.messages_per_minute),
-            "hour": (3600, self.messages_per_hour),
-            "day": (86400, self.messages_per_day)
+            "second": (1, limits["second"]),
+            "minute": (60, limits["minute"]),
+            "hour": (3600, limits["hour"]),
+            "day": (86400, limits["day"])
         }
         
         for window, (seconds, limit) in windows.items():
@@ -242,11 +312,12 @@ class WebSocketRateLimiter:
                 count = self._message_counts.get(key, {}).get(window, 0)
             print(f"[DEBUG] check_message_limit: client_id={client_id} user_id={user_id} ip_address={ip_address} window={window} count={count} limit={limit}")
             if count >= limit:
-                logger.warning(f"[RateLimiter] Rate limit exceeded for client_id={client_id}, user_id={user_id}, ip={ip_address}, window={window}, limit={limit}, count={count}")
-                return False, f"Rate limit exceeded ({limit} messages per {window})"
+                await self.handle_rate_limit_violation(identifier)
+                return False, f"Rate limit exceeded ({limit} messages per {window}). Backoff applied."
             else:
                 logger.info(f"[RateLimiter] Allowed: client_id={client_id}, user_id={user_id}, ip={ip_address}, window={window}, limit={limit}, count={count}")
         
+        await self.reset_violations(identifier)  # Reset on success
         return True, None
         
     async def increment_message_count(
@@ -479,3 +550,12 @@ class WebSocketRateLimiter:
             total += int(val) if val else 0
         print(f"[DEBUG] get_user_message_count: total={total}")
         return total 
+
+    def record_violation(self, user_id):
+        rate_limit_violations.labels(user_id=user_id).inc()
+
+    def record_backoff(self, client_id):
+        backoff_active.inc()
+
+    def clear_backoff(self, client_id):
+        backoff_active.dec() 

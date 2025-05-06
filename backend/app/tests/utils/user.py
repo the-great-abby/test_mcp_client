@@ -22,7 +22,8 @@ async def create_random_user(
     username: Optional[str] = None,
     password: Optional[str] = None,
     is_active: bool = True,
-    is_superuser: bool = False
+    is_superuser: bool = False,
+    is_admin: bool = False
 ) -> User:
     """Create a random user for testing."""
     if db is None:
@@ -36,7 +37,8 @@ async def create_random_user(
             username=username or random_lower_string(),
             hashed_password=get_password_hash(password or random_lower_string()),
             is_active=is_active,
-            is_superuser=is_superuser
+            is_superuser=is_superuser,
+            is_admin=is_admin
         )
         
         db.add(user)

@@ -135,4 +135,33 @@ async def test_rate_limit_reset(
         await ws_helper.send_message(client_id, {"type": "test", "content": f"message {i}"})
         await asyncio.sleep(0.1)
     
-    await ws_helper.disconnect(client_id) 
+    await ws_helper.disconnect(client_id)
+
+@pytest.mark.real_websocket
+async def test_message_rate_limit_by_client_type(
+    ws_helper: WebSocketTestHelper,
+    websocket_manager: WebSocketManager,
+    rate_limiter: WebSocketRateLimiter
+):
+    # Set up different limits for each type
+    rate_limiter.client_type_limits = {
+        "authenticated": {"second": 5, "minute": 10, "hour": 100, "day": 1000},
+        "anonymous": {"second": 2, "minute": 3, "hour": 10, "day": 20},
+    }
+
+    # Authenticated user
+    auth_token = "valid-token"
+    client_id_auth = str(uuid.uuid4())
+    ws_auth = await ws_helper.connect(client_id=client_id_auth, token=auth_token)
+    for i in range(5):
+        await ws_helper.send_message(client_id_auth, {"type": "chat", "content": f"auth {i}"})
+    with pytest.raises(ConnectionClosed):
+        await ws_helper.send_message(client_id_auth, {"type": "chat", "content": "over limit"})
+
+    # Anonymous user
+    client_id_anon = str(uuid.uuid4())
+    ws_anon = await ws_helper.connect(client_id=client_id_anon)
+    for i in range(2):
+        await ws_helper.send_message(client_id_anon, {"type": "chat", "content": f"anon {i}"})
+    with pytest.raises(ConnectionClosed):
+        await ws_helper.send_message(client_id_anon, {"type": "chat", "content": "over limit"}) 

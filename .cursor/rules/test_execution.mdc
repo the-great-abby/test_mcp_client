@@ -3,6 +3,26 @@ description:
 globs: 
 alwaysApply: undefined
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 # Test Execution Guidelines
 
 ## Preferred Test Execution Method

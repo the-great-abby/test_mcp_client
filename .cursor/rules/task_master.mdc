@@ -3,6 +3,74 @@ description: taskmaster related
 globs: 
 alwaysApply: false
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+# Task Master Usage
+
+- **Overview**
+  - Task Master is the project's CLI tool for managing tasks, dependencies, and workflow automation.
+
+- **Basic Commands**
+  - Add a new task:
+    ```
+    npx task-master add-task --prompt="Describe your task here"
+    ```
+  - List all tasks:
+    ```
+    npx task-master list
+    ```
+  - Show details for a specific task:
+    ```
+    npx task-master show <id>
+    ```
+  - Set the status of a task:
+    ```
+    npx task-master set-status --id=<id> --status=<status>
+    ```
+  - Add a dependency:
+    ```
+    npx task-master add-dependency --id=<id> --depends-on=<id>
+    ```
+  - Remove a dependency:
+    ```
+    npx task-master remove-dependency --id=<id> --depends-on=<id>
+    ```
+  - Expand a task into subtasks:
+    ```
+    npx task-master expand --id=<id> --num=3
+    ```
+  - Analyze task complexity:
+    ```
+    npx task-master analyze-complexity
+    ```
+
+- **Best Practices**
+  - Use clear, actionable prompts when adding tasks.
+  - Regularly update task status as you work.
+  - Use dependencies to model workflow order.
+  - Review and expand tasks for better planning.
+
+- **References**
+  - [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc)
+
 # Task Master CLI Usage
 
 - **Overview**
@@ -114,3 +182,45 @@ alwaysApply: false
   - [meta.mdc](mdc:.cursor/rules/meta.mdc) for rule structure
   - [dev_workflow.mdc](mdc:.cursor/rules/dev_workflow.mdc) for workflow integration
   - Task Master CLI documentation 
+
+- **Advanced Usage**
+  - Add a subtask to an existing task:
+    ```
+    npx task-master add-subtask --id=<parent_id> --prompt="Describe the subtask"
+    ```
+  - Remove a subtask:
+    ```
+    npx task-master remove-subtask --id=<subtask_id>
+    ```
+  - Remove a task:
+    ```
+    npx task-master remove-task --id=<id>
+    ```
+  - Update a task with new information:
+    ```
+    npx task-master update-task --id=<id> --prompt="New details or requirements"
+    ```
+  - Expand all pending tasks:
+    ```
+    npx task-master expand --all --force
+    ```
+  - Validate and fix dependencies:
+    ```
+    npx task-master validate-dependencies
+    npx task-master fix-dependencies
+    ```
+
+- **Troubleshooting**
+  - If a command fails, check for typos or missing required arguments.
+  - Use `npx task-master --help` to see all available commands and options.
+  - If tasks are not updating as expected, regenerate task files:
+    ```
+    npx task-master generate
+    ```
+  - For issues with dependencies, use `validate-dependencies` and `fix-dependencies`.
+
+- **Workflow Integration**
+  - Add new tasks for features, bugs, or improvements as you work.
+  - Regularly review and update task status to keep the project board current.
+  - Use dependencies to enforce correct task order and avoid blockers.
+  - Integrate Task Master with your CI/CD or documentation workflow for automated task tracking. 

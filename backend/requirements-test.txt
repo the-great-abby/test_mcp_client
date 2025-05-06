@@ -10,4 +10,6 @@ pytest-mock>=3.12.0
 asgi-lifespan==2.1.0
 aiohttp>=3.9.0,<4.0.0
 redis>=5.0.0,<6.0.0
-websockets 
+websockets
+prometheus_client
+psutil 

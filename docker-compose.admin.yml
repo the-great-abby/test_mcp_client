@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  admin:
+    build:
+      context: .
+      dockerfile: docker/admin/Dockerfile
+    volumes:
+      - .:/admin
+    working_dir: /admin
+    command: bash
+    environment:
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434/api/generate} 

@@ -3,6 +3,26 @@ description: Guidelines for organizing and managing test services, mocks, and re
 globs: backend/tests/**/*.py
 alwaysApply: true
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 
 # Test Services Organization
 

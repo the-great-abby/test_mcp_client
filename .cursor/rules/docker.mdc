@@ -3,6 +3,26 @@ description: Docker related
 globs: 
 alwaysApply: false
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 - **Environment Commands**
   - **Status Check:** `make -f Makefile.ai ai-status`
     - Shows running containers

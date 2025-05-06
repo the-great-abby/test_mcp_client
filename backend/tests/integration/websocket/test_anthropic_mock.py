@@ -31,7 +31,7 @@ class TestAnthropicStreamingMock:
         """Test streaming with content blocks."""
         print(f"[DEBUG] ws_helper type: {type(ws_helper)}, value: {ws_helper}")
         client_id = str(uuid.uuid4())
-        ws = await ws_helper.connect(client_id=client_id)
+        ws = await ws_helper.connect(client_id=client_id, auth_token="dummy-token")
         assert ws.client_state == WebSocketState.CONNECTED
 
         # Start stream
@@ -63,7 +63,7 @@ class TestAnthropicStreamingMock:
     async def test_stream_interruption_recovery(self, ws_helper: WebSocketTestHelper):
         """Test recovery from stream interruption."""
         client_id = str(uuid.uuid4())
-        ws = await ws_helper.connect(client_id=client_id)
+        ws = await ws_helper.connect(client_id=client_id, auth_token="dummy-token")
         assert ws.client_state == WebSocketState.CONNECTED
 
         # Start stream
@@ -84,7 +84,7 @@ class TestAnthropicStreamingMock:
         await ws_helper.disconnect(client_id)
 
         # Reconnect
-        ws = await ws_helper.connect(client_id=client_id)
+        ws = await ws_helper.connect(client_id=client_id, auth_token="dummy-token")
         assert ws.client_state == WebSocketState.CONNECTED
 
         # Start new stream
@@ -108,7 +108,7 @@ class TestAnthropicStreamingMock:
     async def test_concurrent_streams(self, ws_helper: WebSocketTestHelper):
         """Test handling of concurrent stream attempts."""
         client_id = str(uuid.uuid4())
-        ws = await ws_helper.connect(client_id=client_id)
+        ws = await ws_helper.connect(client_id=client_id, auth_token="dummy-token")
         assert ws.client_state == WebSocketState.CONNECTED
 
         # Start first stream
@@ -167,7 +167,7 @@ class TestAnthropicStreamingMock:
         """Test content validation in streams."""
         # Test empty content with a fresh client
         empty_client_id = str(uuid.uuid4())
-        ws_empty = await ws_helper.connect(client_id=empty_client_id)
+        ws_empty = await ws_helper.connect(client_id=empty_client_id, auth_token="dummy-token")
         assert ws_empty.client_state == WebSocketState.CONNECTED
 
         empty_messages, empty_final = await ws_helper.wait_for_stream(
@@ -187,7 +187,7 @@ class TestAnthropicStreamingMock:
 
         # Test very long content with a new fresh client
         long_client_id = str(uuid.uuid4())
-        ws_long = await ws_helper.connect(client_id=long_client_id)
+        ws_long = await ws_helper.connect(client_id=long_client_id, auth_token="dummy-token")
         assert ws_long.client_state == WebSocketState.CONNECTED
 
         # Use a smaller content size to avoid rate limits in test
@@ -210,7 +210,7 @@ class TestAnthropicStreamingMock:
     async def test_stream_rate_limiting(self, ws_helper: WebSocketTestHelper):
         """Test rate limiting for streams."""
         client_id = str(uuid.uuid4())
-        ws = await ws_helper.connect(client_id=client_id)
+        ws = await ws_helper.connect(client_id=client_id, auth_token="dummy-token")
         assert ws.client_state == WebSocketState.CONNECTED
 
         # Patch the rate limiter to a low value for this test (on the mock websocket)

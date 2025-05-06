@@ -15,7 +15,7 @@ POSTGRES_DB ?= test_db
 ANTHROPIC_API_KEY ?=
 PYTHONUNBUFFERED ?= 1
 
-.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html ai-anthropic-ws-test ai-anthropic-http-test
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html ai-anthropic-ws-test ai-anthropic-http-test frontend-dev frontend-build frontend-preview frontend-lint maintain-rules admin-maintain-rules generate-code-docs admin-generate-code-docs admin-generate-code-story admin-generate-request-lifecycle-story admin-build ai-rebuild-backend-test ai-test-integration-admin ai-list-backend-test ai-dev-build ai-dev-up ai-dev-down ai-dev-logs ai-dev-restart
 
 # Set default coverage threshold, can be overridden: make -f Makefile.ai ai-test-coverage COVERAGE_FAIL_UNDER=40
 COVERAGE_FAIL_UNDER ?= 80
@@ -68,10 +68,9 @@ ai-test:
 
 # Run migrations with state tracking
 ai-migrate:
-	@(output=$$(make migrate 2>&1 | sed 's/"/\\"/g'); \
-	exit_code=$$?; \
-	current_rev=$$(docker-compose -f docker-compose.test.yml exec -T db-test psql -U postgres -d test_db -t -c 'SELECT version_num FROM alembic_version;' 2>/dev/null | tr -d ' ' || echo 'none'); \
-	$(call json_output,"ai-migrate","$$([ $$exit_code -eq 0 ] && echo 'success' || echo 'error')",$$exit_code,"{\"output\":\"$${output}\",\"current_revision\":\"$$current_rev\"}")) 2>/dev/null
+	@echo '{"status": "starting", "action": "migrate", "message": "Applying Alembic migrations in $(AI_SERVICE) using $(AI_COMPOSE_FILE)..."}'
+	@docker-compose -f $(AI_COMPOSE_FILE) exec -T $(AI_SERVICE) alembic upgrade head || echo '{"status": "error", "action": "migrate", "message": "Migration apply failed."}'
+	@echo '{"status": "complete", "action": "migrate", "message": "Migration apply complete."}'
 
 # Validate system state
 ai-validate:
@@ -381,3 +380,107 @@ ai-test-redis-mock-xv:
 ai-test-redis-mock-sync:
 	@echo 'Running sync Redis mock tests...'
 	PYTHONPATH=backend pytest backend/tests/utils/test_sync_mock_redis.py -v
+
+frontend-dev:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-preview:
+	cd frontend && npm run preview
+
+frontend-lint:
+	cd frontend && npm run lint
+
+maintain-rules:
+	python maintain_rules.py
+
+admin-maintain-rules:
+	docker compose -f docker-compose.admin.yml run --rm admin python maintain_rules.py
+
+# generate-code-docs:
+# 	python generate_code_docs.py
+# (Prefer running the admin-generate-code-docs target via the admin container for consistency)
+
+admin-generate-code-docs:
+	docker compose -f docker-compose.admin.yml run --rm admin python generate_code_docs.py
+
+# Requires Ollama to be running locally and accessible from the container
+admin-generate-code-story:
+	docker compose -f docker-compose.admin.yml run --rm admin python generate_code_story.py
+
+# Requires Ollama to be running locally and accessible from the container
+admin-generate-request-lifecycle-story:
+	docker compose -f docker-compose.admin.yml run --rm admin python generate_request_lifecycle_story.py
+
+# Add new target admin-build
+admin-build:
+	docker compose -f docker-compose.admin.yml build admin
+
+# AI-friendly Alembic migration workflow
+# Usage:
+#   make -f Makefile.ai ai-migrate-init [COMPOSE_FILE=docker-compose.test.yml] [SERVICE=backend-test]
+#   make -f Makefile.ai ai-migrate-create name=desc [COMPOSE_FILE=docker-compose.test.yml] [SERVICE=backend-test]
+#   make -f Makefile.ai ai-migrate [COMPOSE_FILE=docker-compose.test.yml] [SERVICE=backend-test]
+#   make -f Makefile.ai ai-migrate-rollback [COMPOSE_FILE=docker-compose.test.yml] [SERVICE=backend-test]
+
+AI_COMPOSE_FILE ?= docker-compose.test.yml
+AI_SERVICE ?= backend-test
+
+ai-migrate-init:
+	@echo '{"status": "starting", "action": "migrate-init", "message": "Initializing Alembic in $(AI_SERVICE) using $(AI_COMPOSE_FILE)..."}'
+	@docker-compose -f $(AI_COMPOSE_FILE) exec -T $(AI_SERVICE) alembic init alembic || echo '{"status": "error", "action": "migrate-init", "message": "Alembic init failed."}'
+	@echo '{"status": "complete", "action": "migrate-init", "message": "Alembic initialization complete."}'
+
+ai-migrate-create:
+	@echo '{"status": "starting", "action": "migrate-create", "message": "Creating Alembic migration in $(AI_SERVICE) using $(AI_COMPOSE_FILE)..."}'
+	@docker-compose -f $(AI_COMPOSE_FILE) exec -T $(AI_SERVICE) python3 /app/scripts/create_migration.py "$(name)" || echo '{"status": "error", "action": "migrate-create", "message": "Migration creation failed."}'
+	@echo '{"status": "complete", "action": "migrate-create", "message": "Migration creation complete."}'
+
+ai-migrate:
+	@echo '{"status": "starting", "action": "migrate", "message": "Applying Alembic migrations in $(AI_SERVICE) using $(AI_COMPOSE_FILE)..."}'
+	@docker-compose -f $(AI_COMPOSE_FILE) exec -T $(AI_SERVICE) alembic upgrade head || echo '{"status": "error", "action": "migrate", "message": "Migration apply failed."}'
+	@echo '{"status": "complete", "action": "migrate", "message": "Migration apply complete."}'
+
+ai-migrate-rollback:
+	@echo '{"status": "starting", "action": "migrate-rollback", "message": "Rolling back Alembic migration in $(AI_SERVICE) using $(AI_COMPOSE_FILE)..."}'
+	@docker-compose -f $(AI_COMPOSE_FILE) exec -T $(AI_SERVICE) alembic downgrade -1 || echo '{"status": "error", "action": "migrate-rollback", "message": "Migration rollback failed."}'
+	@echo '{"status": "complete", "action": "migrate-rollback", "message": "Migration rollback complete."}'
+
+ai-rebuild-backend-test:
+	@echo '{"status": "starting", "action": "rebuild-backend-test", "message": "Forcing clean rebuild of backend-test container..."}'
+	@docker-compose -f docker-compose.test.yml build --no-cache backend-test
+	@echo '{"status": "complete", "action": "rebuild-backend-test", "message": "backend-test container rebuilt with no cache."}'
+
+# Run only the admin integration tests (AI-friendly, non-interactive)
+ai-test-integration-admin:
+	docker-compose -f docker-compose.test.yml run --rm backend-test pytest -vv tests/integration/test_admin.py
+
+# List files in a directory inside the backend-test container (non-interactive)
+ai-list-backend-test:
+	docker-compose -f docker-compose.test.yml run --rm backend-test ls -lR /app
+
+# AI-friendly dev environment targets
+ai-dev-build:
+	@echo '{"status": "starting", "action": "dev-build", "message": "Building dev containers..."}'
+	@docker-compose -f docker-compose.dev.yml build
+	@echo '{"status": "complete", "action": "dev-build", "message": "Dev build complete."}'
+
+ai-dev-up:
+	@echo '{"status": "starting", "action": "dev-up", "message": "Starting dev containers..."}'
+	@docker-compose -f docker-compose.dev.yml up -d
+	@echo '{"status": "complete", "action": "dev-up", "message": "Dev containers started."}'
+
+ai-dev-down:
+	@echo '{"status": "starting", "action": "dev-down", "message": "Stopping and removing dev containers..."}'
+	@docker-compose -f docker-compose.dev.yml down -v
+	@echo '{"status": "complete", "action": "dev-down", "message": "Dev containers stopped and volumes removed."}'
+
+ai-dev-logs:
+	@docker-compose -f docker-compose.dev.yml logs --tail=100 | sed 's/"/\\"/g' | tr '\n' ' '
+
+ai-dev-restart:
+	@docker-compose -f docker-compose.dev.yml down
+	@docker-compose -f docker-compose.dev.yml up -d
+	@echo '{"status": "complete", "action": "dev-restart", "message": "Dev containers restarted."}'
