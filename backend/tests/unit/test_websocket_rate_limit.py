@@ -322,3 +322,51 @@ class TestWebSocketRateLimiter:
             
         finally:
             await helper.cleanup()
+
+    @pytest.mark.asyncio
+    async def test_exponential_backoff(self, rate_limiter):
+        """Test exponential backoff logic for repeated violations."""
+        identifier = "testuser:127.0.0.1:client123"
+        # Simulate repeated violations
+        backoff_times = []
+        for i in range(1, 6):
+            backoff = await rate_limiter.handle_rate_limit_violation(identifier)
+            backoff_times.append(backoff)
+        expected = [2, 4, 8, 16, 32]
+        assert backoff_times[:5] == expected[:5]
+        # Exceed cap
+        for _ in range(10):
+            backoff = await rate_limiter.handle_rate_limit_violation(identifier)
+        assert backoff <= rate_limiter.MAX_BACKOFF_SECONDS
+
+        # After quiet period, violations reset
+        await asyncio.sleep(rate_limiter.BACKOFF_RESET_SECONDS + 1)
+        await rate_limiter.reset_violations(identifier)
+        backoff = await rate_limiter.handle_rate_limit_violation(identifier)
+        assert backoff == rate_limiter.BASE_BACKOFF_SECONDS
+
+    @pytest.mark.asyncio
+    async def test_backoff_enforcement(self, rate_limiter):
+        """Test that backoff blocks requests and returns correct wait time."""
+        identifier = "testuser:127.0.0.1:client456"
+        await rate_limiter.handle_rate_limit_violation(identifier)
+        wait = await rate_limiter.check_backoff(identifier)
+        assert wait > 0
+        # Simulate a request during backoff
+        allowed, reason = await rate_limiter.check_message_limit(
+            client_id="client456",
+            user_id="testuser",
+            ip_address="127.0.0.1"
+        )
+        assert not allowed
+        assert "wait" in reason
+
+    @pytest.mark.asyncio
+    async def test_backoff_reset(self, rate_limiter):
+        """Test that backoff resets after quiet period."""
+        identifier = "testuser:127.0.0.1:client789"
+        await rate_limiter.handle_rate_limit_violation(identifier)
+        await asyncio.sleep(rate_limiter.BACKOFF_RESET_SECONDS + 1)
+        await rate_limiter.reset_violations(identifier)
+        backoff = await rate_limiter.handle_rate_limit_violation(identifier)
+        assert backoff == rate_limiter.BASE_BACKOFF_SECONDS

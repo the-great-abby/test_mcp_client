@@ -3,6 +3,26 @@ description: filepath associations
 globs: 
 alwaysApply: false
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 - **Project Structure Reference**
   - `/backend/` - Python FastAPI backend code
     - `/app/` - Main application code

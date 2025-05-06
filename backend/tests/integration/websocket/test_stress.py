@@ -42,7 +42,7 @@ async def create_connections(
     for i in range(batch_size):
         helper = test_helpers[i] if i < len(test_helpers) else None
         if not helper or not helper.connected:
-            success = await helper.connect(auth_token=auth_token)
+            success = await helper.connect(auth_token="dummy-token")
             if not success:
                 logger.error(f"Failed to connect helper {i}")
                 continue

@@ -1,3 +1,23 @@
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
 - **Global CLI Commands**
   - Task Master provides global CLI through `task-master` command
   - Install globally: `npm install -g claude-task-master`

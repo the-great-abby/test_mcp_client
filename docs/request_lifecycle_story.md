@@ -1,0 +1,1 @@
+[Error calling Ollama: 404 Client Error: Not Found for url: http://host.docker.internal:11434/api/generate]

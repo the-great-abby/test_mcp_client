@@ -137,4 +137,8 @@ See `.env.example` for all required environment variables. Key variables include
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Admin API
+
+See [docs/admin_endpoints.md](docs/admin_endpoints.md) for a full guide to all admin-only API endpoints, including usage tips and example requests. 

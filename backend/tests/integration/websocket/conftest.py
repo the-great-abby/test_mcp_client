@@ -115,6 +115,11 @@ def auth_token(test_user: User) -> str:
         expires_delta=timedelta(minutes=15)
     )
 
+def ws_helper_fixture_debug(request, use_mock, auth_token):
+    test_name = getattr(request, 'node', None)
+    test_name = getattr(test_name, 'name', 'unknown') if test_name else 'unknown'
+    print(f"[DEBUG][ws_helper fixture] test_name: {test_name}, use_mock: {use_mock}, auth_token: {auth_token}")
+
 @pytest.fixture
 async def ws_helper(
     websocket_manager: WebSocketManager,
@@ -147,15 +152,18 @@ async def ws_helper(
 
     print(f"[DEBUG][ws_helper] USE_MOCK_WEBSOCKET env: {os.environ.get('USE_MOCK_WEBSOCKET')}, use_mock: {use_mock}")
 
+    # Use dummy token in mock mode, real token otherwise
+    token_to_use = "dummy-token" if use_mock else auth_token
     helper = WebSocketTestHelper(
         websocket_manager=websocket_manager,
         rate_limiter=rate_limiter,
         test_user_id=test_user.id,
-        auth_token=auth_token,
+        auth_token=token_to_use,
         mock_mode=use_mock,
         ws_token_query=request.config.getoption('ws_token_query', False)
     )
     test_helpers.append(helper)
+    ws_helper_fixture_debug(request, use_mock, token_to_use)
     try:
         yield helper
     finally:

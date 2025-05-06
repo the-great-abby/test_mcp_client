@@ -3,7 +3,26 @@ description: meta
 globs: 
 alwaysApply: false
 ---
- 
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 # Rule Organization and Maintenance
 
 - **Rule Categories**
@@ -63,13 +82,14 @@ alwaysApply: false
   - ❌ DON'T: Over-complicate
   - ❌ DON'T: Ignore exceptions
 
-- **Documentation**
+- **Documentation & Cross-Referencing**
   - Use markdown formatting
   - Include code blocks
   - Add file references
   - Maintain versions
   - Document changes
   - Link related rules
+  - Reference [ai_pair_programming_workflow.mdc](mdc:.cursor/rules/ai_pair_programming_workflow.mdc) for collaborative session documentation and knowledge capture
 
 - **Operational Guidelines**
   - **Terminal Management**
@@ -84,8 +104,8 @@ alwaysApply: false
     - Follow consistent test-debug-retest patterns
     - Keep test environment clean between runs
 
-  - **Troubleshooting**
-    - Restart Cursor when terminal shows corruption signs
-    - Clean test environment before new test runs
-    - Use appropriate Makefile.ai commands
-    - Document any recurring issues 
+  - **Collaboration**
+    - For collaborative debugging and development, follow the [AI Pair Programming & Debugging Workflow](mdc:.cursor/rules/ai_pair_programming_workflow.mdc).
+
+# Related Rules
+- [ai_pair_programming_workflow.mdc](mdc:.cursor/rules/ai_pair_programming_workflow.mdc) - AI Pair Programming & Debugging Workflow 

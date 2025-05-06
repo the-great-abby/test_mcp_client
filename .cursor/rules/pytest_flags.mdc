@@ -3,6 +3,26 @@ description:
 globs:
 alwaysApply: false
 ---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
 # Pytest Flag Requirements
 
 - **Required Flags**

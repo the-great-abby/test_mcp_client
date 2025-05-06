@@ -1,0 +1,52 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+{section}
+----------------
+(Add content for this section.)
+
+
+{section}
+----------------
+(Add content for this section.)
+
+
+# AI Pair Programming & Debugging Workflow
+
+## Overview
+- Standardizes collaboration between developers and AI assistants
+- Optimizes test-debug-fix cycles
+- Ensures knowledge capture and rule compliance
+
+## Workflow Guidelines
+
+### Automated Feedback
+- Always use Makefile.ai targets for running tests and getting structured output.
+- Prefer running tests after each commit or before PRs to catch issues early.
+
+### Structured Debug Sessions
+- When a test fails, provide the full error output and specify which test or module to focus on.
+- Tackle one failing test/module at a time: fix, verify, then move to the next.
+
+### Incremental Fix & Verify
+- Use a tight feedback loop: fix a single issue, re-run only the relevant test, and confirm the fix before proceeding.
+
+### Knowledge Capture
+- After resolving an issue, document the fix in `docs/`, as code comments, or in a shared knowledge base.
+
+### Workflow Customization
+- Communicate your preferred working style (step-by-step, high-level, checklists, etc.) to the AI assistant.
+
+### Proactive Rule Enforcement
+- The AI assistant will proactively check changes against project rules and flag deviations.
+
+### Session Summaries
+- At the end of each session or major task, the AI assistant will provide a summary of actions taken, what's left, and suggested next steps.
+
+## References
+- [cursor_rules.mdc](mdc:.cursor/rules/cursor_rules.mdc)
+- [meta.mdc](mdc:.cursor/rules/meta.mdc)
+- [self_improve.mdc](mdc:.cursor/rules/self_improve.mdc)
+- [testing_flow.mdc](mdc:.cursor/rules/testing_flow.mdc)

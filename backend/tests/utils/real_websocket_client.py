@@ -2,6 +2,7 @@ import asyncio
 import json
 from websockets import connect, ConnectionClosed
 from starlette.websockets import WebSocketState
+import os
 
 class RealWebSocketClient:
     """
@@ -10,6 +11,9 @@ class RealWebSocketClient:
     Supports custom headers for external APIs.
     """
     def __init__(self, uri, token=None, debug=False, headers=None, ws_token_query=False):
+        # Fast-fail if running in mock mode
+        if os.environ.get("USE_MOCK_WEBSOCKET", "0").lower() in ("1", "true", "yes"):
+            raise RuntimeError("RealWebSocketClient should not be used in mock mode (USE_MOCK_WEBSOCKET=1)")
         self.uri = uri
         self.token = token
         self.headers = headers or {}

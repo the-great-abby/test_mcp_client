@@ -1,15 +1,15 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 # Cursor Rules Index
 
 - **Overview**
-  - Central reference for all project rules and guidelines
-  - Each rule focuses on specific aspects of development
-  - Rules are organized by category for easy reference
-  - All rules follow consistent formatting and structure
+  - Central reference for all project rules and guidelines.
+  - Each rule focuses on specific aspects of development.
+  - Rules are organized by category for easy reference.
+  - All rules follow consistent formatting and structure.
 
 - **Rule Categories**
   - **Memory and State Management**
@@ -25,6 +25,7 @@ alwaysApply: true
         - Entity-relation knowledge graph
         - Observation-based fact storage
         - Semantic search capabilities
+      - **Note:** Use the memory server for any feature that requires persistence or cross-session recall, or when building advanced AI/agent workflows that benefit from long-term memory.
 
   - **Testing & Quality**
     - [test_services.mdc](mdc:.cursor/rules/test_services.mdc) - Service mocking and testing patterns
@@ -48,15 +49,19 @@ alwaysApply: true
     - [meta.mdc](mdc:.cursor/rules/meta.mdc) - Rule maintenance guidelines
     - [rule_template.mdc](mdc:.cursor/rules/rule_template.mdc) - Template for creating new rules
 
+  - **Collaboration**
+    - [ai_pair_programming_workflow.mdc](mdc:.cursor/rules/ai_pair_programming_workflow.mdc) - AI Pair Programming & Debugging Workflow (recommended for all collaborative debugging and development sessions)
+    - [task_master.mdc](mdc:.cursor/rules/task_master.mdc) - Task Master CLI usage and best practices
+
 - **Creating New Rules**
   1. Start with the template:
      ```bash
      cp .cursor/rules/rule_template.mdc .cursor/rules/my_new_rule.mdc
      ```
-  2. Fill in each section of the template
-  3. Add concrete examples from the codebase
-  4. Add the rule to the appropriate category in this index
-  5. Update references in related rules
+  2. Fill in each section of the template.
+  3. Add concrete examples from the codebase.
+  4. Add the rule to the appropriate category in this index.
+  5. Update references in related rules.
 
 - **Required Rule Structure**
   - Every rule must start with YAML frontmatter:
@@ -69,8 +74,8 @@ alwaysApply: true
     ```
 
 - **File References**
-  - Use `[filename](mdc:path/to/file)` syntax
-  - Always use relative paths from workspace root
+  - Use `[filename](mdc:path/to/file)` syntax.
+  - Always use relative paths from workspace root.
   - Example: [schema.prisma](mdc:prisma/schema.prisma)
 
 - **Code Examples**
@@ -86,16 +91,16 @@ alwaysApply: true
   ```
 
 - **Content Guidelines**
-  - Start with high-level overview
-  - Include specific, actionable requirements
-  - Show examples of correct implementation
-  - Reference existing code when possible
-  - Keep rules DRY by referencing other rules
+  - Start with high-level overview.
+  - Include specific, actionable requirements.
+  - Show examples of correct implementation.
+  - Reference existing code when possible.
+  - Keep rules DRY by referencing other rules.
 
 - **Rule Creation/Maintenance**
-  - Save new rules as plain text first (e.g., `NEWRULE.txt`)
-  - Move to `.cursor/rules/` with `.mdc` extension
-  - Update this index when adding new rules
+  - Save new rules as plain text first (e.g., `NEWRULE.txt`).
+  - Move to `.cursor/rules/` with `.mdc` extension.
+  - Update this index when adding new rules.
   - Example workflow:
     ```bash
     # 1. Save rule as NEWRULE.txt in project root
@@ -105,17 +110,25 @@ alwaysApply: true
     ```
 
 - **Best Practices**
-  - Use bullet points for clarity
-  - Keep descriptions concise
-  - Include both DO and DON'T examples
-  - Reference actual code over theoretical examples
-  - Use consistent formatting across rules
-  - Always link new rules in this index
-  - Maintain rule categorization
-  - Update references when moving/renaming rules
+  - Use bullet points for clarity.
+  - Keep descriptions concise.
+  - Include both DO and DON'T examples.
+  - Reference actual code over theoretical examples.
+  - Use consistent formatting across rules.
+  - Always link new rules in this index.
+  - Maintain rule categorization.
+  - Update references when moving/renaming rules.
 
 - **Rule Application**
-  - Rules are automatically applied based on file patterns
-  - Multiple rules may apply to the same file
-  - More specific rules take precedence
-  - `alwaysApply: true` rules are checked for all files 
+  - Rules are automatically applied based on file patterns.
+  - Multiple rules may apply to the same file.
+  - More specific rules take precedence.
+  - `alwaysApply: true` rules are checked for all files.
+
+- **Rule Documentation Maintenance**
+  - After adding or updating any rule in `.cursor/rules/`, you MUST run:
+    ```
+    make -f Makefile.ai admin-maintain-rules
+    ```
+    This regenerates the rules documentation and relationships in `docs/`.
+  - This should be done at least once per programming session where rules are changed, and always before merging a PR that modifies rules.

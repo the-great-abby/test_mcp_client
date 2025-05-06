@@ -29,6 +29,8 @@ from pydantic import ValidationError as PydanticValidationError
 from app.core.websocket import WebSocketManager
 from app.core.redis import get_redis_client
 from app.api.v1 import auth, users, conversations, messages, websocket, health
+from prometheus_client import make_asgi_app
+from starlette.middleware.wsgi import WSGIMiddleware
 
 # Set up logging
 setup_logging()
@@ -120,6 +122,8 @@ def create_app() -> FastAPI:
         if not await app.state.redis.ping():
             logger.error("Failed to connect to Redis")
             raise RuntimeError("Failed to connect to Redis")
+
+    app.mount("/metrics", WSGIMiddleware(make_asgi_app()))
 
     return app
 
