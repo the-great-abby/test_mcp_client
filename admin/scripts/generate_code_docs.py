@@ -2,8 +2,9 @@ import os
 import ast
 from pathlib import Path
 
-CODE_DIRS = [Path('backend'), Path('app')]
-DOCS_DIR = Path('docs')
+PROJECT_ROOT = Path(os.environ.get('PROJECT_ROOT', '/mnt/actual_code'))
+CODE_DIRS = [PROJECT_ROOT / 'backend', PROJECT_ROOT / 'app']
+DOCS_DIR = PROJECT_ROOT / 'docs'
 OUTPUT_FILE = DOCS_DIR / 'code_index.md'
 
 
@@ -69,7 +70,7 @@ def main():
     py_files = scan_codebase()
     docs = {}
     for py_file in py_files:
-        rel_path = py_file.relative_to(Path('.'))
+        rel_path = py_file.relative_to(PROJECT_ROOT)
         docs[str(rel_path)] = extract_docstrings_from_file(py_file)
     md = generate_markdown(docs)
     OUTPUT_FILE.write_text(md, encoding='utf-8')

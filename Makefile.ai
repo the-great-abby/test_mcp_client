@@ -15,7 +15,7 @@ POSTGRES_DB ?= test_db
 ANTHROPIC_API_KEY ?=
 PYTHONUNBUFFERED ?= 1
 
-.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html ai-anthropic-ws-test ai-anthropic-http-test frontend-dev frontend-build frontend-preview frontend-lint maintain-rules admin-maintain-rules generate-code-docs admin-generate-code-docs admin-generate-code-story admin-generate-request-lifecycle-story admin-build ai-rebuild-backend-test ai-test-integration-admin ai-list-backend-test ai-dev-build ai-dev-up ai-dev-down ai-dev-logs ai-dev-restart
+.PHONY: ai-status ai-build ai-restart ai-logs ai-test ai-migrate ai-validate test-setup ai-stop ai-clean ai-down ai-test-websocket ai-test-unit ai-test-integration ai-test-coverage ai-up-test ai-test-log ai-test-stop ai-test-debug ai-test-real ai-test-mock ai-test-redis-mock ai-env-up ai-memory-create ai-memory-destroy ai-coverage-missing ai-test-coverage-missing aio-coverage-report aio-coverage-html aio-coverage-open-html ai-anthropic-ws-test ai-anthropic-http-test frontend-dev frontend-build frontend-preview frontend-lint maintain-rules admin-maintain-rules generate-code-docs admin-generate-code-docs admin-generate-code-story admin-generate-request-lifecycle-story admin-build ai-rebuild-backend-test ai-test-integration-admin ai-list-backend-test ai-dev-build ai-dev-up ai-dev-down ai-dev-logs ai-dev-restart admin-export-knowledge-graph ai-list-admin hot-reload-on hot-reload-off frontend-open frontend-curl frontend-install frontend-restart frontend-build-container frontend-up frontend-down frontend-logs frontend-shell first-run ai-export-knowledge-graph ai-troubleshoot ai-ide-api-build ai-ide-api-up ai-ide-api-down ai-onboarding-health
 
 # Set default coverage threshold, can be overridden: make -f Makefile.ai ai-test-coverage COVERAGE_FAIL_UNDER=40
 COVERAGE_FAIL_UNDER ?= 80
@@ -63,7 +63,11 @@ ai-logs:
 ai-test:
 	@echo '{"status": "starting", "action": "test", "message": "Running tests with args: $(PYTEST_ARGS)"}'
 	@make -f Makefile.ai test-setup
-	@docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -T backend-test python -m pytest tests $(PYTEST_ARGS)
+	@if echo '$(PYTEST_ARGS)' | grep -q 'mock_service' || [ "$(USE_MOCK_WEBSOCKET)" = "1" ]; then \
+	  docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -e USE_MOCK_WEBSOCKET=1 -T backend-test python -m pytest tests $(PYTEST_ARGS); \
+	else \
+	  docker compose -f docker-compose.test.yml exec -e LOG_LEVEL=$(LOG_LEVEL) -e USE_MOCK_WEBSOCKET=0 -T backend-test python -m pytest tests $(PYTEST_ARGS); \
+	fi
 	@echo '{"status": "complete", "action": "test", "message": "Tests complete"}'
 
 # Run migrations with state tracking
@@ -393,6 +397,12 @@ frontend-preview:
 frontend-lint:
 	cd frontend && npm run lint
 
+frontend-open:
+	@open http://localhost:3000
+
+frontend-curl:
+	@curl -i http://localhost:3000
+
 maintain-rules:
 	python maintain_rules.py
 
@@ -404,15 +414,15 @@ admin-maintain-rules:
 # (Prefer running the admin-generate-code-docs target via the admin container for consistency)
 
 admin-generate-code-docs:
-	docker compose -f docker-compose.admin.yml run --rm admin python generate_code_docs.py
+	docker compose -f docker-compose.admin.yml run --rm admin python scripts/generate_code_docs.py
 
 # Requires Ollama to be running locally and accessible from the container
 admin-generate-code-story:
-	docker compose -f docker-compose.admin.yml run --rm admin python generate_code_story.py
+	docker compose -f docker-compose.admin.yml run --rm admin python scripts/generate_code_story.py
 
 # Requires Ollama to be running locally and accessible from the container
 admin-generate-request-lifecycle-story:
-	docker compose -f docker-compose.admin.yml run --rm admin python generate_request_lifecycle_story.py
+	docker compose -f docker-compose.admin.yml run --rm admin python scripts/generate_request_lifecycle_story.py
 
 # Add new target admin-build
 admin-build:
@@ -461,6 +471,10 @@ ai-test-integration-admin:
 ai-list-backend-test:
 	docker-compose -f docker-compose.test.yml run --rm backend-test ls -lR /app
 
+# List files in a directory inside the admin container (non-interactive)
+ai-list-admin:
+	docker compose -f docker-compose.admin.yml run --rm admin ls -lR /admin
+
 # AI-friendly dev environment targets
 ai-dev-build:
 	@echo '{"status": "starting", "action": "dev-build", "message": "Building dev containers..."}'
@@ -484,3 +498,75 @@ ai-dev-restart:
 	@docker-compose -f docker-compose.dev.yml down
 	@docker-compose -f docker-compose.dev.yml up -d
 	@echo '{"status": "complete", "action": "dev-restart", "message": "Dev containers restarted."}'
+
+# Export the knowledge graph (Mermaid) to docs/cursor_knowledge_graph.md
+admin-export-knowledge-graph:
+	docker compose -f docker-compose.admin.yml run --rm admin python scripts/export_knowledge_graph.py
+
+clean-logs:
+	rm -f *.log */*.log */*/*.log
+
+# Toggle hot reload for backend-test in docker-compose.test.yml
+# Usage: make -f Makefile.ai hot-reload-on | hot-reload-off
+
+hot-reload-on:
+	@sed -i '' 's/^# \(- \.\/backend:\/app\)/\1/' docker-compose.test.yml
+	@echo 'Hot reload ENABLED: ./backend is now mounted into backend-test container.'
+
+hot-reload-off:
+	@sed -i '' 's/^\(- \.\/backend:\/app\)/# \1/' docker-compose.test.yml
+	@echo 'Hot reload DISABLED: ./backend is no longer mounted into backend-test container.'
+
+frontend-install:
+	docker-compose -f docker-compose.dev.yml exec frontend npm install
+
+frontend-restart:
+	docker-compose -f docker-compose.dev.yml restart frontend
+
+frontend-build-container:
+	docker-compose -f docker-compose.dev.yml build frontend
+
+frontend-up:
+	docker-compose -f docker-compose.dev.yml up -d frontend
+
+frontend-down:
+	docker-compose -f docker-compose.dev.yml down
+
+frontend-logs:
+	docker-compose -f docker-compose.dev.yml logs -f frontend
+
+frontend-shell:
+	docker-compose -f docker-compose.dev.yml exec frontend sh
+
+.PHONY: first-run
+first-run:
+	bash ./first_run.sh
+
+.PHONY: ai-export-knowledge-graph
+ai-export-knowledge-graph:
+	python admin/scripts/export_knowledge_graph.py
+
+.PHONY: ai-troubleshoot
+ai-troubleshoot:
+	bash ./ai_troubleshoot.sh
+
+.PHONY: ai-ide-api-build ai-ide-api-up ai-ide-api-down
+ai-ide-api-build:
+	docker build -t ai-ide-api ./ai-ide-api
+
+ai-ide-api-up:
+	docker run --rm -d -p 8080:8080 --name ai-ide-api \
+	  -v $$(pwd)/onboarding.yaml:/app/onboarding.yaml \
+	  -v $$(pwd)/.ai-ide-config.json:/app/.ai-ide-config.json \
+	  -v $$(pwd)/docs:/app/docs \
+	  -v $$(pwd)/.cursor/rules:/app/.cursor/rules \
+	  ai-ide-api
+
+ai-ide-api-down:
+	docker stop ai-ide-api || true
+
+.PHONY: ai-onboarding-health
+ai-onboarding-health:
+	bash ./ai_onboarding_checklist.sh
+	python lint_rules.py
+	@echo "\nReminder: If you made major onboarding or rules changes, update ONBOARDING_CHANGELOG.md and bump the version in .ai-ide-config.json!"

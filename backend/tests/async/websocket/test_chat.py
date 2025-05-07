@@ -13,7 +13,7 @@ import uuid
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import AsyncGenerator
 
-from app.core.auth import create_access_token
+from app.core.auth import create_access_token, async_create_access_token
 from tests.conftest import test_settings
 from app.core.config import settings
 from app.models import User
@@ -112,9 +112,8 @@ async def test_token(request, test_user, test_settings) -> str:
         return api_key
     
     # For non-real service tests, create a test token
-    token = await create_access_token(
+    token = await async_create_access_token(
         {"sub": str(test_user.id)},
-        settings=test_settings,
         expires_delta=timedelta(minutes=30)
     )
     return token
@@ -151,7 +150,8 @@ async def test_websocket_chat_basic(
         assert "timestamp" in response["metadata"]
         
     finally:
-        await websocket_helper.disconnect()
+        for cid in websocket_helper.get_active_connections():
+            await websocket_helper.disconnect(cid)
         # Ensure cleanup
         await websocket_manager.clear_all_connections()
         await rate_limiter.clear_all()
@@ -208,7 +208,8 @@ async def test_websocket_rate_limiting(
         logger.info(f"Rate limit test complete: {messages_sent} sent, {messages_rejected} rejected")
         
     finally:
-        await websocket_helper.disconnect()
+        for cid in websocket_helper.get_active_connections():
+            await websocket_helper.disconnect(cid)
         await rate_limiter.clear_all()  # Clean up rate limit data
 
 @pytest.mark.asyncio
@@ -242,19 +243,19 @@ async def test_websocket_disconnect_cleanup(
     """Test proper cleanup after WebSocket disconnection."""
     # Connect to WebSocket
     await websocket_helper.connect(test_token)
-    client_id = websocket_helper.client_id
     
     # Verify connection is active
     assert len(websocket_manager.active_connections) == 1
     
     # Disconnect
-    await websocket_helper.disconnect()
+    for cid in websocket_helper.get_active_connections():
+        await websocket_helper.disconnect(cid)
     
     # Verify cleanup
     assert len(websocket_manager.active_connections) == 0
     # Rate limiter should have cleared connection count
     assert await rate_limiter.check_connection_limit(
-        client_id=client_id,
+        client_id=cid,
         user_id=str(test_user.id),
         ip_address="127.0.0.1"
     ) == (True, None)
@@ -313,7 +314,8 @@ async def test_chat_message_streaming_old(test_user, test_settings, websocket_he
         
     finally:
         if ws:
-            await websocket_helper.disconnect(client_id)
+            for cid in websocket_helper.get_active_connections():
+                await websocket_helper.disconnect(cid)
         await websocket_manager.clear_all_connections()
         await rate_limiter.clear_all()
 
@@ -349,8 +351,9 @@ async def test_websocket_streaming_chat(
         assert final_message and final_message["type"] == "stream_end"
         
     finally:
-        await websocket_helper.disconnect()
-        await rate_limiter.clear_all()  # Clean up rate limit data 
+        for cid in websocket_helper.get_active_connections():
+            await websocket_helper.disconnect(cid)
+        await rate_limiter.clear_all()  # Clean up rate limit data
 
 @pytest.mark.asyncio
 @pytest.mark.real_websocket
@@ -377,8 +380,8 @@ async def test_message_send_receive(
     assert received["sender_id"] == test_user.id
     
     # Clean up
-    await websocket_helper.disconnect(ws1.client_id)
-    await websocket_helper.disconnect(ws2.client_id)
+    for cid in websocket_helper.get_active_connections():
+        await websocket_helper.disconnect(cid)
 
 @pytest.mark.asyncio
 @pytest.mark.real_websocket
@@ -409,7 +412,8 @@ async def test_message_broadcast(
     
     # Clean up
     for client in clients:
-        await websocket_helper.disconnect(client.client_id)
+        for cid in websocket_helper.get_active_connections():
+            await websocket_helper.disconnect(cid)
 
 @pytest.mark.asyncio
 @pytest.mark.real_websocket
@@ -441,7 +445,8 @@ async def test_message_validation(
     assert close.code == status.WS_1003_UNSUPPORTED_DATA
     assert "Missing required field" in str(close.reason)
     
-    await websocket_helper.disconnect()
+    for cid in websocket_helper.get_active_connections():
+        await websocket_helper.disconnect(cid)
 
 @pytest.mark.asyncio
 @pytest.mark.real_websocket
@@ -472,8 +477,8 @@ async def test_message_order(
         assert received["sender_id"] == test_user.id
     
     # Clean up
-    await websocket_helper.disconnect(ws1.client_id)
-    await websocket_helper.disconnect(ws2.client_id)
+    for cid in websocket_helper.get_active_connections():
+        await websocket_helper.disconnect(cid)
 
 @pytest.mark.asyncio
 @pytest.mark.real_websocket
@@ -490,10 +495,11 @@ async def test_client_disconnect_handling(
     ws2 = await websocket_helper.connect()
     
     # Disconnect client 1
-    await websocket_helper.disconnect(ws1.client_id)
+    for cid in websocket_helper.get_active_connections():
+        await websocket_helper.disconnect(cid)
     
     # Verify client 1 is removed from manager
-    assert websocket_manager.get_connection(ws1.client_id) is None
+    assert websocket_manager.get_connection(cid) is None
     
     # Verify client 2 can still send/receive messages
     message = {"type": "chat", "content": "Still connected"}
@@ -504,4 +510,5 @@ async def test_client_disconnect_handling(
     assert received["content"] == "Still connected"
     
     # Clean up
-    await websocket_helper.disconnect(ws2.client_id) 
+    for cid in websocket_helper.get_active_connections():
+        await websocket_helper.disconnect(cid) 

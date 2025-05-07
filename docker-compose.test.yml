@@ -26,10 +26,11 @@ services:
     env_file:
       - .env.test
     volumes:
-      # - ./backend:/app
+      # Enable hot reload for local development and tests:
+      - ./backend:/app
       - ./test-reports:/app/test-reports
       - ./scripts:/app/scripts
-      - /Users/abby/code/ai_projects/mcp_chat_client/coverage_data:/app/coverage_data
+      - ./coverage_data:/app/coverage_data
     depends_on:
       - db-test
       - redis-test

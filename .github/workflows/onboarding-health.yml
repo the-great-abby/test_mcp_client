@@ -1,0 +1,24 @@
+name: Onboarding Health Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  onboarding-health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: make dev-build
+      - name: Run onboarding health check
+        run: make ai-onboarding-health 

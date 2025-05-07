@@ -1,6 +1,25 @@
 #!/bin/sh
 set -e
 
+# Print environment banner
+case "$ENVIRONMENT" in
+  dev|development)
+    echo "\033[1;32m🟢 DEV environment active\033[0m"
+    ;;
+  test)
+    echo "\033[1;33m🟡 TEST environment active\033[0m"
+    ;;
+  staging)
+    echo "\033[1;35m🟣 STAGING environment active\033[0m"
+    ;;
+  prod|production)
+    echo "\033[1;31m🔴 PRODUCTION environment active\033[0m"
+    ;;
+  *)
+    echo "\033[1;34m🔵 ENVIRONMENT not set (defaulting to development)\033[0m"
+    ;;
+esac
+
 # Function to wait for PostgreSQL
 wait_for_postgres() {
     echo "Waiting for PostgreSQL to be ready..."

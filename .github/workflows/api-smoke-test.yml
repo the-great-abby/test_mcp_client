@@ -1,0 +1,22 @@
+name: AI-IDE Onboarding API Smoke Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API Docker image
+        run: make -f Makefile.ai ai-ide-api-build
+      - name: Run API container
+        run: make -f Makefile.ai ai-ide-api-up
+      - name: Wait for API
+        run: sleep 10
+      - name: Test API endpoint
+        run: curl -f http://localhost:8080/metadata
+      - name: Stop API container
+        run: make -f Makefile.ai ai-ide-api-down 

@@ -1,4 +1,4 @@
-.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean open-backend-coverage add-task defer-task list-deferred-tasks next-task set-task-done backend-test-shell backend-shell migrate-dev set-task-status pytest-integration-admin admin-ui-build admin-ui-up admin-ui-down admin-ui-clean sveltekit-init ai-admin-ui-build ai-admin-ui-up ai-admin-ui-down ai-admin-ui-clean admin-ui-install ai-admin-ui-install admin-ui-dev-build admin-ui-dev-up admin-ui-dev-down ai-admin-ui-dev-build ai-admin-ui-dev-up ai-admin-ui-dev-down admin-ui-clean-deps ai-admin-ui-clean-deps
+.PHONY: dev build clean stop logs migrate migrate-init migrate-create migrate-rollback test test-setup test-unit test-watch test-coverage help ai-build ai-logs ai-restart check-dev test-integration test-e2e test-clean alembic-setup pycache-clean open-backend-coverage add-task defer-task list-deferred-tasks next-task set-task-done backend-test-shell backend-shell migrate-dev set-task-status pytest-integration-admin admin-ui-build admin-ui-up admin-ui-down admin-ui-clean sveltekit-init ai-admin-ui-build ai-admin-ui-up ai-admin-ui-down ai-admin-ui-clean admin-ui-install ai-admin-ui-install admin-ui-dev-build admin-ui-dev-up admin-ui-dev-down ai-admin-ui-dev-build ai-admin-ui-dev-up ai-admin-ui-dev-down admin-ui-clean-deps ai-admin-ui-clean-deps update-task task-show task-next staging-build staging-up staging-down staging-logs staging-shell-frontend staging-shell-backend env-status frontend-shell frontend-install frontend-dev frontend-build frontend-preview frontend-lint frontend-format frontend-test switch-to-dev switch-to-test switch-to-staging env-dev env-test env-staging env-restore
 
 # Development commands
 dev:
@@ -186,7 +186,11 @@ pycache-clean:
 open-backend-coverage:
 	make -f Makefile.ai -C backend ai-open-coverage
 
-# Task Master: Add a new task with a variable prompt and optional priority
+# --- Task Master Integration ---
+# NOTE: For best results with Cursor and AI-IDE tools, install Task Master globally:
+#   npm install -g task-master-ai
+# This ensures all Makefile targets below work reliably.
+
 add-task:
 	@if [ -z "$(PROMPT)" ]; then \
 		echo "Please provide PROMPT, e.g., make add-task PROMPT='Describe your task here.'"; \
@@ -194,7 +198,7 @@ add-task:
 	fi; \
 	PRIORITY_ARG="--priority=$(if $(PRIORITY),$(PRIORITY),low)"; \
 	echo "Adding task with prompt: $(PROMPT) and priority: $${PRIORITY_ARG#--priority=}"; \
-	npx task-master add-task --prompt="$(PROMPT)" $$PRIORITY_ARG
+	task-master add-task --prompt="$(PROMPT)" $$PRIORITY_ARG
 
 # Usage: make defer-task TASK_ID=<id>
 defer-task:
@@ -203,16 +207,16 @@ defer-task:
 		exit 1; \
 	fi; \
 	echo "Setting status of task $(TASK_ID) to deferred..."; \
-	npx task-master set-status --id=$(TASK_ID) --status=deferred
+	task-master set-status --id=$(TASK_ID) --status=deferred
 
 list-deferred-tasks:
 	@echo "Listing all deferred/nice-to-have tasks..."
-	npx task-master list --status=deferred
+	task-master list --status=deferred
 
 # Usage: make next-task
 next-task:
 	@echo "Showing the next eligible task to work on..."
-	npx task-master next
+	task-master next
 
 # Usage: make set-task-done TASK_ID=<id>
 set-task-done:
@@ -221,7 +225,7 @@ set-task-done:
 		exit 1; \
 	fi; \
 	echo "Marking task $(TASK_ID) as done..."; \
-	npx task-master set-status --id=$(TASK_ID) --status=done
+	task-master set-status --id=$(TASK_ID) --status=done
 
 # Open an interactive shell in backend-test (test environment)
 backend-test-shell:
@@ -243,7 +247,7 @@ set-task-status:
 		exit 1; \
 	fi; \
 	echo "Setting status of task $(TASK_ID) to $(STATUS)..."; \
-	npx task-master set-status --id=$(TASK_ID) --status=$(STATUS)
+	task-master set-status --id=$(TASK_ID) --status=$(STATUS)
 
 # Run only the admin integration tests
 pytest-integration-admin:
@@ -316,6 +320,182 @@ admin-ui-clean-deps:
 
 ai-admin-ui-clean-deps:
 	rm -rf admin-ui/node_modules admin-ui/package-lock.json admin-ui/pnpm-lock.yaml admin-ui/yarn.lock
+
+# Task Master: Update an existing task by ID with a prompt describing the update
+update-task:
+	@if [ -z "$(ID)" ]; then \
+		echo "Error: Please provide ID, e.g., make update-task ID=26 PROMPT='Describe the update...'"; \
+		exit 1; \
+	fi; \
+	if [ -z "$(PROMPT)" ]; then \
+		echo "Error: Please provide PROMPT, e.g., make update-task ID=26 PROMPT='Describe the update...'"; \
+		exit 1; \
+	fi; \
+	task-master update-task --id=$$ID --prompt="$$PROMPT"
+
+# Task Master: Show a task by ID
+# Usage: make task-show ID=26
+task-show:
+	@if [ -z "$(ID)" ]; then \
+		echo "Error: Please provide ID, e.g., make task-show ID=26"; \
+		exit 1; \
+	fi; \
+	task-master show $(ID)
+
+# Task Master: Show the next eligible task
+# Usage: make task-next
+task-next:
+	task-master next
+
+# Staging commands
+staging-build:
+	docker compose -f docker-compose.staging.yml build
+
+staging-up:
+	docker compose -f docker-compose.staging.yml up -d
+
+staging-down:
+	docker compose -f docker-compose.staging.yml down -v
+
+staging-logs:
+	docker compose -f docker-compose.staging.yml logs --tail=100
+
+staging-shell-frontend:
+	docker compose -f docker-compose.staging.yml exec frontend sh
+
+staging-shell-backend:
+	docker compose -f docker-compose.staging.yml exec backend bash
+
+env-status:
+	@echo "\n🔎 Environment Status Overview\n-----------------------------"
+	@echo "\n[Dev Environment] (docker-compose.dev.yml):"
+	@docker-compose -f docker-compose.dev.yml ps || echo "(not present)"
+	@echo "\n[Test Environment] (docker-compose.test.yml):"
+	@docker-compose -f docker-compose.test.yml ps || echo "(not present)"
+	@echo "\n[Staging Environment] (docker-compose.staging.yml):"
+	@docker compose -f docker-compose.staging.yml ps || echo "(not present)"
+	@echo "\nSummary:"
+	@dev=$$(docker-compose -f docker-compose.dev.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
+	test=$$(docker-compose -f docker-compose.test.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
+	staging=$$(docker compose -f docker-compose.staging.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
+	if [ $$dev -gt 0 ]; then echo "  🟢 Dev environment: $$dev containers running"; fi; \
+	if [ $$test -gt 0 ]; then echo "  🟡 Test environment: $$test containers running"; fi; \
+	if [ $$staging -gt 0 ]; then echo "  🟣 Staging environment: $$staging containers running"; fi; \
+	if [ $$(($$dev + $$test + $$staging)) -gt 1 ]; then echo "\n⚠️  Multiple environments are running! This may cause port conflicts."; fi
+
+# Frontend (React/Vite) containerized commands
+frontend-shell:
+	docker-compose -f docker-compose.dev.yml exec frontend sh
+
+frontend-install:
+	docker-compose -f docker-compose.dev.yml exec frontend npm install
+
+frontend-dev:
+	docker-compose -f docker-compose.dev.yml exec frontend npm run dev
+
+frontend-build:
+	docker-compose -f docker-compose.dev.yml exec frontend npm run build
+
+frontend-preview:
+	docker-compose -f docker-compose.dev.yml exec frontend npm run preview
+
+frontend-lint:
+	docker-compose -f docker-compose.dev.yml exec frontend npm run lint
+
+frontend-format:
+	docker-compose -f docker-compose.dev.yml exec frontend npx prettier --write .
+
+frontend-test:
+	docker-compose -f docker-compose.dev.yml exec frontend npm run test
+
+# One-command environment switchers
+switch-to-dev:
+	@echo "\n🔄 Switching to DEV environment..."
+	make stop
+	make clean
+	make dev-build
+	make dev
+	@echo "\n🟢 DEV environment is now active. See dev_quickstart.md."
+
+switch-to-test:
+	@echo "\n🔄 Switching to TEST environment..."
+	make stop
+	make clean
+	make test-setup
+	make test
+	@echo "\n🟡 TEST environment is now active. See test_quickstart.md."
+
+switch-to-staging:
+	@echo "\n🔄 Switching to STAGING environment..."
+	make stop
+	make clean
+	make staging-build
+	make staging-up
+	@echo "\n🟣 STAGING environment is now active. See staging_quickstart.md."
+
+# Database management helpers (generic, customize as needed)
+db-seed-dev:
+	docker-compose -f docker-compose.dev.yml exec backend python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
+
+db-seed-test:
+	docker-compose -f docker-compose.test.yml exec backend-test python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
+
+db-seed-staging:
+	docker compose -f docker-compose.staging.yml exec backend python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
+
+db-reset-dev:
+	docker-compose -f docker-compose.dev.yml exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS mcp_chat; CREATE DATABASE mcp_chat;"
+
+db-reset-test:
+	docker-compose -f docker-compose.test.yml exec db-test psql -U postgres -c "DROP DATABASE IF EXISTS test_db; CREATE DATABASE test_db;"
+
+db-reset-staging:
+	docker compose -f docker-compose.staging.yml exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS mcp_chat; CREATE DATABASE mcp_chat;"
+
+db-backup-dev:
+	docker-compose -f docker-compose.dev.yml exec postgres pg_dump -U postgres mcp_chat > dev_db_backup.sql
+
+db-backup-test:
+	docker-compose -f docker-compose.test.yml exec db-test pg_dump -U postgres test_db > test_db_backup.sql
+
+db-backup-staging:
+	docker compose -f docker-compose.staging.yml exec postgres pg_dump -U postgres mcp_chat > staging_db_backup.sql
+
+# .env file management with timestamped backups and symlink to last backup
+env-dev:
+	@if [ -f .env ]; then \
+	  ts=$$(date +%Y%m%d-%H%M%S); \
+	  cp .env .env.backup-$$ts; \
+	  ln -sf .env.backup-$$ts .env.last_backup; \
+	  echo "[env-dev] Backed up existing .env to .env.backup-$$ts and updated .env.last_backup symlink."; \
+	fi
+	@if [ -f .env.dev ]; then cp .env.dev .env && echo "[env-dev] Switched to .env.dev."; else echo "[env-dev] .env.dev not found!"; fi
+
+env-test:
+	@if [ -f .env ]; then \
+	  ts=$$(date +%Y%m%d-%H%M%S); \
+	  cp .env .env.backup-$$ts; \
+	  ln -sf .env.backup-$$ts .env.last_backup; \
+	  echo "[env-test] Backed up existing .env to .env.backup-$$ts and updated .env.last_backup symlink."; \
+	fi
+	@if [ -f .env.test ]; then cp .env.test .env && echo "[env-test] Switched to .env.test."; else echo "[env-test] .env.test not found!"; fi
+
+env-staging:
+	@if [ -f .env ]; then \
+	  ts=$$(date +%Y%m%d-%H%M%S); \
+	  cp .env .env.backup-$$ts; \
+	  ln -sf .env.backup-$$ts .env.last_backup; \
+	  echo "[env-staging] Backed up existing .env to .env.backup-$$ts and updated .env.last_backup symlink."; \
+	fi
+	@if [ -f .env.staging ]; then cp .env.staging .env && echo "[env-staging] Switched to .env.staging."; else echo "[env-staging] .env.staging not found!"; fi
+
+env-restore:
+	@if [ -L .env.last_backup ] && [ -f "$(readlink .env.last_backup)" ]; then \
+	  cp -f "$(readlink .env.last_backup)" .env; \
+	  echo "[env-restore] Restored .env from $$(readlink .env.last_backup)"; \
+	else \
+	  echo "[env-restore] No .env.last_backup symlink or backup file found."; \
+	fi
 
 .DEFAULT_GOAL := dev 
 

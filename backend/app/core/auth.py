@@ -121,6 +121,11 @@ def create_access_token(
     )
     return encoded_jwt
 
+# Async wrapper for use in async contexts (e.g., async test fixtures)
+async def async_create_access_token(*args, **kwargs) -> str:
+    """Async wrapper for create_access_token for use in async test fixtures."""
+    return create_access_token(*args, **kwargs)
+
 # Define pwd_context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 

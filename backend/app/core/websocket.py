@@ -141,6 +141,7 @@ class WebSocketManager:
         websocket: WebSocket,
         user_id: str
     ) -> bool:
+        logger.error(f"[CONNECT ENTRY] headers={dict(websocket.headers)} query_params={dict(websocket.query_params)}")
         logger.debug(f"[WebSocketManager] connect START client_id={client_id} user_id={user_id}")
         try:
             # Debug: log all headers and query params on connect
@@ -788,23 +789,26 @@ class WebSocketManager:
         logger.info("Cleared all WebSocket connections and related data")
 
     async def handle_stream_start(self, client_id: str, message: Dict[str, Any]) -> None:
-        """Handle stream start message.
-
-        Args:
-            client_id: Client ID
-            message: Stream start message
-        """
+        """Handle stream start message by streaming LLM output in real time."""
         try:
+            # Extract prompt/messages for the LLM
+            # Support both 'content' (string) and 'messages' (list of dicts)
             content = message.get("content")
-            if not content:
-                logger.error(f"[handle_stream_start] Empty stream content for client {client_id}")
-                await self.send_error(client_id, "Empty stream content")
+            messages = message.get("messages")
+            system = message.get("system")
+
+            # If 'messages' is not provided, build a single-message list from 'content'
+            if not messages and content:
+                messages = [{"role": "user", "content": content}]
+
+            if not messages:
+                logger.error(f"[handle_stream_start] No messages or content for client {client_id}")
+                await self.send_error(client_id, "No prompt or messages provided for streaming")
                 return
 
-            # Store stream state
             self.connection_state[client_id] = ConnectionState.STREAMING
 
-            # Send stream start
+            # Send stream_start
             await self.send_message(
                 client_id=client_id,
                 message={
@@ -814,35 +818,22 @@ class WebSocketManager:
                 }
             )
 
-            # Start streaming content
-            chunk_size = 10
-            chunks = [content[i:i+chunk_size] for i in range(0, len(content), chunk_size)]
-            logger.info(f"[handle_stream_start] Streaming {len(chunks)} chunks to client {client_id}")
-
-            for idx, chunk in enumerate(chunks):
+            # Stream LLM output in real time
+            async for chunk in self.model_client.stream(messages, system=system):
                 if self.connection_state.get(client_id) != ConnectionState.STREAMING:
-                    logger.warning(f"[handle_stream_start] Streaming interrupted for client {client_id} at chunk {idx}")
+                    logger.warning(f"[handle_stream_start] Streaming interrupted for client {client_id}")
                     break
-
-                logger.debug(f"[handle_stream_start] Sending chunk {idx+1}/{len(chunks)}: '{chunk}' to client {client_id}")
                 await self.send_message(
                     client_id=client_id,
                     message={
                         "type": "stream",
-                        "content": {
-                            "content_block_delta": {
-                                "type": "text",
-                                "text": chunk
-                            }
-                        },
+                        "content": {"content_block_delta": chunk},
                         "metadata": message.get("metadata", {})
                     }
                 )
-                await asyncio.sleep(0.1)  # Simulate streaming delay
 
-            # Send stream end if still streaming
+            # Send stream_end if still streaming
             if self.connection_state.get(client_id) == ConnectionState.STREAMING:
-                logger.info(f"[handle_stream_start] Sending stream_end to client {client_id}")
                 await self.send_message(
                     client_id=client_id,
                     message={
