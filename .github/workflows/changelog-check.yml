@@ -1,0 +1,21 @@
+name: Onboarding/Rules Changelog Check
+
+on:
+  pull_request:
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for onboarding/rules changes
+        id: changes
+        run: |
+          git fetch origin main
+          git diff --name-only origin/main...HEAD > changed_files.txt
+          if grep -E 'onboarding|rules|ai-ide-config' changed_files.txt; then
+            if ! grep ONBOARDING_CHANGELOG.md changed_files.txt; then
+              echo '❌ Please update ONBOARDING_CHANGELOG.md for onboarding/rules changes.'
+              exit 1
+            fi
+          fi 
