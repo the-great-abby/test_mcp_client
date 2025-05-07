@@ -186,7 +186,11 @@ pycache-clean:
 open-backend-coverage:
 	make -f Makefile.ai -C backend ai-open-coverage
 
-# Task Master: Add a new task with a variable prompt and optional priority
+# --- Task Master Integration ---
+# NOTE: For best results with Cursor and AI-IDE tools, install Task Master globally:
+#   npm install -g task-master-ai
+# This ensures all Makefile targets below work reliably.
+
 add-task:
 	@if [ -z "$(PROMPT)" ]; then \
 		echo "Please provide PROMPT, e.g., make add-task PROMPT='Describe your task here.'"; \
@@ -194,7 +198,7 @@ add-task:
 	fi; \
 	PRIORITY_ARG="--priority=$(if $(PRIORITY),$(PRIORITY),low)"; \
 	echo "Adding task with prompt: $(PROMPT) and priority: $${PRIORITY_ARG#--priority=}"; \
-	npx task-master add-task --prompt="$(PROMPT)" $$PRIORITY_ARG
+	task-master add-task --prompt="$(PROMPT)" $$PRIORITY_ARG
 
 # Usage: make defer-task TASK_ID=<id>
 defer-task:
@@ -203,16 +207,16 @@ defer-task:
 		exit 1; \
 	fi; \
 	echo "Setting status of task $(TASK_ID) to deferred..."; \
-	npx task-master set-status --id=$(TASK_ID) --status=deferred
+	task-master set-status --id=$(TASK_ID) --status=deferred
 
 list-deferred-tasks:
 	@echo "Listing all deferred/nice-to-have tasks..."
-	npx task-master list --status=deferred
+	task-master list --status=deferred
 
 # Usage: make next-task
 next-task:
 	@echo "Showing the next eligible task to work on..."
-	npx task-master next
+	task-master next
 
 # Usage: make set-task-done TASK_ID=<id>
 set-task-done:
@@ -221,7 +225,7 @@ set-task-done:
 		exit 1; \
 	fi; \
 	echo "Marking task $(TASK_ID) as done..."; \
-	npx task-master set-status --id=$(TASK_ID) --status=done
+	task-master set-status --id=$(TASK_ID) --status=done
 
 # Open an interactive shell in backend-test (test environment)
 backend-test-shell:
@@ -243,7 +247,7 @@ set-task-status:
 		exit 1; \
 	fi; \
 	echo "Setting status of task $(TASK_ID) to $(STATUS)..."; \
-	npx task-master set-status --id=$(TASK_ID) --status=$(STATUS)
+	task-master set-status --id=$(TASK_ID) --status=$(STATUS)
 
 # Run only the admin integration tests
 pytest-integration-admin:

@@ -47,3 +47,31 @@ Example endpoints:
 - http://localhost:8080/metadata
 - http://localhost:8080/rules
 - http://localhost:8080/knowledge-graph 
+
+## 🚀 Task Master Integration (AI-IDE & Automation Friendly)
+
+**For best results with Cursor and AI-IDE tools, install Task Master globally:**
+
+```sh
+npm install -g task-master-ai
+```
+
+This ensures all Makefile targets below work reliably and are discoverable by both humans and AI tools.
+
+### Common Makefile Targets for Task Master
+
+| Target                  | Description                                 |
+|-------------------------|---------------------------------------------|
+| `make add-task`         | Add a new task with a prompt and priority   |
+| `make defer-task`       | Set a task's status to deferred             |
+| `make list-deferred-tasks` | List all deferred/nice-to-have tasks    |
+| `make next-task`        | Show the next eligible task to work on      |
+| `make set-task-done`    | Mark a task as done                         |
+| `make set-task-status`  | Set a task or subtask to a specific status  |
+| `make update-task`      | Update an existing task by ID               |
+| `make task-show`        | Show a task by ID                           |
+| `make task-next`        | Show the next eligible task (shortcut)      |
+
+> **Tip:** If you encounter a 'command not found' error, double-check that Task Master is installed globally and your npm global bin directory is in your PATH.
+
+See [INTEGRATIONS.md](docs/INTEGRATIONS.md#task-master) for full details and advanced usage. 
