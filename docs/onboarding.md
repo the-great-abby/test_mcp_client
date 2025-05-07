@@ -111,4 +111,19 @@ If you see errors, check the logs with `make logs` or `docker compose logs`.
 
 ---
 
+## System Architecture
+
+See [docs/architecture.md](architecture.md) for a high-level diagram and explanation of the system's components and their interactions.
+
+---
+
+## Continuous Improvement Checklist
+
+- [ ] If you find anything missing or confusing in onboarding, update this guide or `WELCOME.md`.
+- [ ] If you introduce a new pattern or fix a common issue, update or add a rule in `.cursor/rules/`.
+- [ ] If you solve a new problem, add it to `KNOWN_ISSUES.md`.
+- [ ] See `CONTRIBUTING.md` for the full checklist before submitting a PR.
+
+---
+
 Happy onboarding! 🎉 

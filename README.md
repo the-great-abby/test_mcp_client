@@ -1,6 +1,19 @@
 # MCP Chat Client
 
+[![Onboarding Complete](https://img.shields.io/badge/onboarding-✅%20complete-brightgreen?style=flat&logo=book)](docs/onboarding.md)
+[![AI-IDE Ready](https://img.shields.io/badge/AI--IDE-🤖%20ready-brightgreen?style=flat&logo=robotframework)](WELCOME.md)
+[![Rule Coverage](https://img.shields.io/badge/rules-📜%20100%25-brightgreen?style=flat&logo=scroll)](docs/rules_index.md)
+[![Docs Coverage](https://img.shields.io/badge/docs-📚%20100%25-brightgreen?style=flat&logo=readthedocs)](docs/README.md)
+[![Troubleshooting Assistant](https://img.shields.io/badge/troubleshooting-🛠️%20assistant-blue?style=flat&logo=helpdesk)](KNOWN_ISSUES.md)
+[![Knowledge Graph](https://img.shields.io/badge/knowledge%20graph-🧠%20available-blueviolet?style=flat&logo=mermaid)](docs/cursor_knowledge_graph.md)
+
 A real-time chat application with WebSocket support, built with FastAPI, PostgreSQL, and Redis.
+
+---
+
+**New here? Start with our [WELCOME.md](WELCOME.md) or [.ai-ide-welcome.md](.ai-ide-welcome.md) for a quick overview and links to all onboarding resources!**
+
+---
 
 ## Features
 
@@ -126,6 +139,11 @@ See `.env.example` for all required environment variables. Key variables include
 - WebSocket settings
 - Test environment settings
 - Monitoring configuration
+- AI provider API keys
+
+**To set up your environment:**
+1. Copy `.env.example` to `.env` and fill in the values as needed.
+2. Run `bash validate_env.sh` to check for missing or empty variables.
 
 ## Contributing
 
@@ -141,4 +159,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Admin API
 
-See [docs/admin_endpoints.md](docs/admin_endpoints.md) for a full guide to all admin-only API endpoints, including usage tips and example requests. 
+See [docs/admin_endpoints.md](docs/admin_endpoints.md) for a full guide to all admin-only API endpoints, including usage tips and example requests.
+
+- **Troubleshooting & Environment Issues:** [docs/env_troubleshooting.md](docs/env_troubleshooting.md)
+- **Known Issues:** [KNOWN_ISSUES.md](KNOWN_ISSUES.md) 

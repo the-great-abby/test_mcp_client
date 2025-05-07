@@ -1,0 +1,60 @@
+# Onboarding Metadata for MCP Chat Client
+
+entrypoints:
+  backend: backend/app/main.py
+  frontend: frontend/src/main.tsx
+  admin_ui: admin-ui/src/main.ts
+  makefile: Makefile.ai
+
+docker_services:
+  - name: backend-test
+    port: 8000
+  - name: db-test
+    port: 5432
+  - name: redis-test
+    port: 6379
+
+makefile_targets:
+  - ai-test
+  - ai-test-unit
+  - ai-test-integration
+  - ai-test-websocket
+  - ai-test-coverage
+  - ai-env-up
+  - ai-env-down
+  - test-setup
+  - test-clean
+  - first-run
+
+environment_variables:
+  - ENVIRONMENT
+  - POSTGRES_HOST
+  - POSTGRES_PORT
+  - REDIS_HOST
+  - REDIS_PORT
+  - JWT_SECRET
+  - OPENAI_API_KEY
+  - ANTHROPIC_API_KEY
+
+documentation:
+  onboarding: docs/onboarding.md
+  ai_onboarding: docs/ai-onboarding.md
+  dev_quickstart: docs/dev_quickstart.md
+  test_quickstart: docs/test_quickstart.md
+  staging_quickstart: docs/staging_quickstart.md
+  troubleshooting: docs/env_troubleshooting.md
+  architecture: docs/architecture.md
+  rules_index: docs/rules_index.md
+  knowledge_graph: docs/cursor_knowledge_graph.md
+  admin_api: docs/admin_endpoints.md
+  workflows: docs/workflows.md
+  docs_index: docs/README.md
+
+rules:
+  directory: .cursor/rules/
+  index: docs/rules_index.md
+
+ai_ide_config:
+  welcome: WELCOME.md
+  ai_welcome: .ai-ide-welcome.md
+  onboarding_yaml: onboarding.yaml 

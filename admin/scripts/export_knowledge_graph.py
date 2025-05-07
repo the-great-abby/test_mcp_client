@@ -1,4 +1,6 @@
 import os
+import json
+import sys
 
 MERMAID_MD = '''# Project Knowledge Graph (Mermaid)
 
@@ -98,13 +100,116 @@ graph TD
 ```
 '''
 
-OUTPUT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../docs/cursor_knowledge_graph.md'))
+# JSON graph structure
+NODES = [
+    {"id": "mcp_chat_client", "label": "mcp_chat_client (project)", "type": "project"},
+    {"id": "backend", "label": "backend (FastAPI)", "type": "service"},
+    {"id": "admin_ui", "label": "admin-ui (SvelteKit)", "type": "service"},
+    {"id": "database", "label": "database (PostgreSQL)", "type": "database"},
+    {"id": "redis", "label": "redis (cache)", "type": "cache"},
+    {"id": "test_environment", "label": "test_environment (Docker Compose)", "type": "infra"},
+    {"id": "test_workflow", "label": "test_workflow", "type": "workflow"},
+    {"id": "dev_workflow", "label": "dev_workflow", "type": "workflow"},
+    {"id": "build_workflow", "label": "build_workflow", "type": "workflow"},
+    {"id": "ci_cd", "label": "ci_cd", "type": "workflow"},
+    {"id": "auth_flow", "label": "auth_flow", "type": "workflow"},
+    {"id": "admin_endpoints", "label": "admin_endpoints", "type": "api"},
+    {"id": "rate_limiting", "label": "rate_limiting", "type": "feature"},
+    {"id": "metrics_dashboard", "label": "metrics_dashboard", "type": "feature"},
+    {"id": "user_management", "label": "user_management", "type": "feature"},
+    {"id": "audit_log", "label": "audit_log", "type": "feature"},
+    {"id": "websocket_support", "label": "websocket_support", "type": "feature"},
+    {"id": "security", "label": "security", "type": "concern"},
+    {"id": "observability", "label": "observability", "type": "concern"},
+    {"id": "error_handling", "label": "error_handling", "type": "concern"},
+    {"id": "performance", "label": "performance", "type": "concern"},
+    {"id": "docs", "label": "docs", "type": "docs"},
+]
+
+EDGES = [
+    # Core Relationships
+    {"from": "backend", "to": "database", "label": "uses"},
+    {"from": "backend", "to": "redis", "label": "uses"},
+    {"from": "admin_ui", "to": "admin_endpoints", "label": "calls"},
+    {"from": "admin_ui", "to": "metrics_dashboard", "label": "displays"},
+    {"from": "admin_ui", "to": "user_management", "label": "manages"},
+    {"from": "admin_ui", "to": "audit_log", "label": "shows"},
+    {"from": "backend", "to": "websocket_support", "label": "exposes"},
+    # Workflow Relationships
+    {"from": "test_workflow", "to": "test_environment", "label": "runs on"},
+    {"from": "dev_workflow", "to": "backend", "label": "runs on"},
+    {"from": "dev_workflow", "to": "admin_ui", "label": "runs on"},
+    {"from": "dev_workflow", "to": "database", "label": "runs on"},
+    {"from": "dev_workflow", "to": "redis", "label": "runs on"},
+    {"from": "build_workflow", "to": "backend", "label": "builds"},
+    {"from": "build_workflow", "to": "admin_ui", "label": "builds"},
+    {"from": "ci_cd", "to": "backend", "label": "deploys"},
+    {"from": "ci_cd", "to": "admin_ui", "label": "deploys"},
+    # Feature/API Relationships
+    {"from": "admin_endpoints", "to": "rate_limiting", "label": "implement"},
+    {"from": "admin_endpoints", "to": "metrics_dashboard", "label": "implement"},
+    {"from": "admin_endpoints", "to": "user_management", "label": "implement"},
+    {"from": "admin_endpoints", "to": "audit_log", "label": "implement"},
+    {"from": "admin_endpoints", "to": "websocket_support", "label": "support"},
+    # Cross-Cutting Concerns
+    {"from": "backend", "to": "security", "label": "enforces"},
+    {"from": "backend", "to": "observability", "label": "provides"},
+    {"from": "backend", "to": "error_handling", "label": "handles"},
+    {"from": "backend", "to": "performance", "label": "optimizes"},
+    {"from": "admin_ui", "to": "security", "label": "enforces"},
+    {"from": "admin_ui", "to": "error_handling", "label": "handles"},
+    # Documentation
+    {"from": "docs", "to": "backend", "label": "documents"},
+    {"from": "docs", "to": "admin_ui", "label": "documents"},
+    {"from": "docs", "to": "admin_endpoints", "label": "documents"},
+    {"from": "docs", "to": "test_workflow", "label": "documents"},
+    {"from": "docs", "to": "dev_workflow", "label": "documents"},
+    # Auth Relationships
+    {"from": "auth_flow", "to": "admin_endpoints", "label": "protects"},
+    {"from": "auth_flow", "to": "admin_ui", "label": "protects"},
+    # Testing Relationships
+    {"from": "test_workflow", "to": "backend", "label": "tests"},
+    {"from": "test_workflow", "to": "admin_endpoints", "label": "tests"},
+    {"from": "test_workflow", "to": "admin_ui", "label": "tests"},
+    {"from": "test_workflow", "to": "websocket_support", "label": "tests"},
+    # Feature-to-Concern
+    {"from": "rate_limiting", "to": "security", "label": "improves"},
+    {"from": "metrics_dashboard", "to": "observability", "label": "improves"},
+    {"from": "audit_log", "to": "security", "label": "improves"},
+    {"from": "audit_log", "to": "observability", "label": "improves"},
+]
+
+MERMAID_OUTPUT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../docs/cursor_knowledge_graph.md'))
+JSON_OUTPUT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../docs/cursor_knowledge_graph.json'))
+
+def export_mermaid():
+    os.makedirs(os.path.dirname(MERMAID_OUTPUT_PATH), exist_ok=True)
+    with open(MERMAID_OUTPUT_PATH, 'w') as f:
+        f.write(MERMAID_MD)
+    print(f"Mermaid knowledge graph exported to {MERMAID_OUTPUT_PATH}")
+
+def export_json():
+    os.makedirs(os.path.dirname(JSON_OUTPUT_PATH), exist_ok=True)
+    graph = {"nodes": NODES, "edges": EDGES}
+    with open(JSON_OUTPUT_PATH, 'w') as f:
+        json.dump(graph, f, indent=2)
+    print(f"JSON knowledge graph exported to {JSON_OUTPUT_PATH}")
 
 def main():
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, 'w') as f:
-        f.write(MERMAID_MD)
-    print(f"Knowledge graph exported to {OUTPUT_PATH}")
+    formats = set()
+    if len(sys.argv) == 1:
+        formats = {"mermaid", "json"}
+    else:
+        for arg in sys.argv[1:]:
+            if arg.lower() in {"mermaid", "json"}:
+                formats.add(arg.lower())
+    if not formats:
+        print("Usage: python export_knowledge_graph.py [mermaid] [json]")
+        return
+    if "mermaid" in formats:
+        export_mermaid()
+    if "json" in formats:
+        export_json()
 
 if __name__ == "__main__":
     main() 

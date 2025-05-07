@@ -1,0 +1,29 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Onboarding & Rules Synchronization Rule
+
+## When to Update
+- Any time you add, remove, or significantly change onboarding docs, rules, or AI-IDE support files.
+- When you add new onboarding scripts, quickstarts, or API endpoints.
+- When you change the structure of `.ai-ide-config.json` or `onboarding.yaml`.
+
+## Required Actions
+- Run `make -f Makefile.ai ai-onboarding-health` to check for missing, outdated, or inconsistent files.
+- Update `ONBOARDING_CHANGELOG.md` with a summary of major changes.
+- Bump the `version` in `.ai-ide-config.json` if onboarding or rules change.
+- Ensure all new/changed rules are listed in `docs/rules_index.md`.
+- Ensure all onboarding scripts are referenced in onboarding docs and Makefile targets.
+
+## Enforcement
+- PRs should not be merged if the onboarding health check fails.
+- CI should run the onboarding health check and block merges on failure.
+
+## Automation
+- Consider adding a pre-commit or CI hook to run `make -f Makefile.ai ai-onboarding-health` automatically.
+- Optionally, automate version bumping and changelog updates with a script.
+
+## References
+- See `lint_rules.py`, `ai_onboarding_checklist.sh`, and `ONBOARDING_CHANGELOG.md` for details.
