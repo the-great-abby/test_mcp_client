@@ -4,8 +4,9 @@ import json
 import requests
 from pathlib import Path
 
-CODE_DIRS = [Path('backend'), Path('app')]
-DOCS_DIR = Path('docs')
+PROJECT_ROOT = Path(os.environ.get('PROJECT_ROOT', '/mnt/actual_code'))
+CODE_DIRS = [PROJECT_ROOT / 'backend', PROJECT_ROOT / 'app']
+DOCS_DIR = PROJECT_ROOT / 'docs'
 OUTPUT_FILE = DOCS_DIR / 'code_story.md'
 # OLLAMA_URL can be set via environment variable, defaults to Docker host-friendly URL
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://host.docker.internal:11434/api/generate')
@@ -69,7 +70,7 @@ def main():
     py_files = scan_codebase()
     stories = []
     for py_file in py_files:
-        rel_path = py_file.relative_to(Path('.'))
+        rel_path = py_file.relative_to(PROJECT_ROOT)
         items, error = extract_code_summary(py_file)
         if error:
             stories.append(f'## {rel_path}\n> Error: {error}\n---')

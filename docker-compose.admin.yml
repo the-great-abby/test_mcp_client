@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: docker/admin/Dockerfile
     volumes:
-      - .:/admin
+      - .:/mnt/actual_code
     working_dir: /admin
     command: bash
     environment:

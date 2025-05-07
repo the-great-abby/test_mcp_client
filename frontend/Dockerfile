@@ -20,4 +20,21 @@ ENV VITE_PORT=3000
 
 EXPOSE 3000
 
-CMD ["./node_modules/.bin/vite", "--host", "0.0.0.0", "--port", "3000"] 
+CMD ["./node_modules/.bin/vite", "--host", "0.0.0.0", "--port", "3000"]
+
+# --- Build stage ---
+FROM node:20-slim as build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm install && npm install -g serve
+COPY . .
+RUN npm run build
+
+# --- Production stage ---
+FROM node:20-slim as production
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./
+EXPOSE 4173 80
+CMD ["npx", "serve", "-s", "dist", "-l", "4173"] 

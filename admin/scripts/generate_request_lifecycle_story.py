@@ -3,8 +3,9 @@ import subprocess
 import requests
 from pathlib import Path
 
-CODE_DIRS = [Path('backend'), Path('app')]
-DOCS_DIR = Path('docs')
+PROJECT_ROOT = Path(os.environ.get('PROJECT_ROOT', '/mnt/actual_code'))
+CODE_DIRS = [PROJECT_ROOT / 'backend', PROJECT_ROOT / 'app']
+DOCS_DIR = PROJECT_ROOT / 'docs'
 OUTPUT_FILE = DOCS_DIR / 'request_lifecycle_story.md'
 # OLLAMA_URL can be set via environment variable, defaults to Docker host-friendly URL
 OLLAMA_URL = os.environ.get('OLLAMA_URL', 'http://host.docker.internal:11434/api/generate')

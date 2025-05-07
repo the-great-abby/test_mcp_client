@@ -14,6 +14,7 @@ from app.core.websocket import WebSocketManager
 from app.core.websocket_rate_limiter import WebSocketRateLimiter
 from tests.utils.websocket_test_helper import WebSocketTestHelper, MockWebSocket
 from app.core.auth import create_access_token
+from tests.utils.mock_redis import MockRedis
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,16 @@ MESSAGES_PER_DAY = 10000
 MAX_MESSAGES_PER_SECOND = 10
 CONNECT_TIMEOUT = 5.0
 MESSAGE_TIMEOUT = 1.0
+
+@pytest.fixture
+def mock_redis():
+    """Mock Redis client."""
+    mock = MockRedis()
+    mock.get = MockRedis.get
+    mock.set = MockRedis.set
+    mock.incr = MockRedis.incr
+    mock.expire = MockRedis.expire
+    return mock
 
 @pytest.mark.unit
 @pytest.mark.mock_service
@@ -57,16 +68,6 @@ class TestWebSocketRateLimiter:
             username="testuser",
             is_active=True
         )
-
-    @pytest.fixture
-    def mock_redis(self):
-        """Mock Redis client."""
-        mock = MockRedis()
-        mock.get = MockRedis.get
-        mock.set = MockRedis.set
-        mock.incr = MockRedis.incr
-        mock.expire = MockRedis.expire
-        return mock
 
     @pytest.fixture
     def rate_limiter(self, mock_redis):

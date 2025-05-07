@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY maintain_rules.py ./
 COPY .cursor/rules/ ./.cursor/rules/
 COPY Makefile.ai ./
+COPY admin/scripts/ ./scripts/
 
 # Set default command
 CMD ["bash"] 

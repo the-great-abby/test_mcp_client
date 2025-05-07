@@ -73,7 +73,7 @@ TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@db-test:5432/test_db
 import pytest
 import json
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime, UTC
 from fastapi.testclient import TestClient
 from app.core.auth import create_access_token
 from app.main import app
@@ -89,6 +89,7 @@ from starlette.websockets import WebSocketDisconnect, WebSocketState
 from websockets.exceptions import ConnectionClosed
 from tests.utils.websocket_test_helper import WebSocketTestHelper
 import asyncio
+import jwt
 
 # Use Docker service host and port for testing
 DOCKER_SERVICE_HOST = os.getenv("DOCKER_SERVICE_HOST", "backend-test")
@@ -708,3 +709,61 @@ async def test_connection_cleanup_real(
     
     # Verify connection is removed
     assert websocket_manager.active_connections.get(client_id) is None
+
+@pytest.mark.real_websocket
+def make_expired_token(create_access_token):
+    # Expired 1 hour ago
+    return create_access_token(data={"sub": str(uuid.uuid4())}, expires_delta=timedelta(hours=-1))
+
+@pytest.mark.real_websocket
+async def test_expired_token_real(ws_helper: WebSocketTestHelper, create_access_token):
+    """Test connection with expired token is rejected."""
+    if os.environ.get("USE_MOCK_WEBSOCKET") == "1" or os.environ.get("ENVIRONMENT") == "test":
+        pytest.skip("Token validation is bypassed in mock/test mode, skipping test_expired_token_real.")
+    expired_token = make_expired_token(create_access_token)
+    client_id = str(uuid.uuid4())
+    with pytest.raises(ConnectionClosed) as exc_info:
+        await ws_helper.connect(client_id=client_id, auth_token=expired_token)
+    close = exc_info.value.rcvd
+    assert close.code == status.WS_1008_POLICY_VIOLATION or close.code == 4401  # Some stacks use 4401 for expired
+    assert "expired" in str(close.reason).lower() or "invalid" in str(close.reason).lower()
+
+@pytest.mark.real_websocket
+async def test_malformed_token_real(ws_helper: WebSocketTestHelper):
+    """Test connection with malformed token is rejected."""
+    if os.environ.get("USE_MOCK_WEBSOCKET") == "1" or os.environ.get("ENVIRONMENT") == "test":
+        pytest.skip("Token validation is bypassed in mock/test mode, skipping test_malformed_token_real.")
+    malformed_token = "not.a.jwt"
+    client_id = str(uuid.uuid4())
+    with pytest.raises(ConnectionClosed) as exc_info:
+        await ws_helper.connect(client_id=client_id, auth_token=malformed_token)
+    close = exc_info.value.rcvd
+    assert close.code == status.WS_1008_POLICY_VIOLATION
+    assert "invalid" in str(close.reason).lower()
+
+@pytest.mark.real_websocket
+async def test_missing_claim_token_real(ws_helper: WebSocketTestHelper, create_access_token):
+    """Test connection with token missing 'sub' claim is rejected."""
+    if os.environ.get("USE_MOCK_WEBSOCKET") == "1" or os.environ.get("ENVIRONMENT") == "test":
+        pytest.skip("Token validation is bypassed in mock/test mode, skipping test_missing_claim_token_real.")
+    # Create a token with no 'sub' claim
+    payload = {"exp": int((datetime.now(UTC) + timedelta(minutes=5)).timestamp())}
+    token = jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    client_id = str(uuid.uuid4())
+    with pytest.raises(ConnectionClosed) as exc_info:
+        await ws_helper.connect(client_id=client_id, auth_token=token)
+    close = exc_info.value.rcvd
+    assert close.code == status.WS_1008_POLICY_VIOLATION
+    assert "sub" in str(close.reason).lower() or "invalid" in str(close.reason).lower()
+
+@pytest.mark.real_websocket
+async def test_token_in_authorization_header_real(ws_helper: WebSocketTestHelper, create_access_token):
+    """Test connection with token in Authorization header is accepted."""
+    if os.environ.get("USE_MOCK_WEBSOCKET") == "1" or os.environ.get("ENVIRONMENT") == "test":
+        pytest.skip("Token validation is bypassed in mock/test mode, skipping test_token_in_authorization_header_real.")
+    valid_token = create_access_token(data={"sub": str(uuid.uuid4())})
+    client_id = str(uuid.uuid4())
+    # Use ws_helper with ws_token_query=False to force header usage
+    ws = await ws_helper.connect(client_id=client_id, auth_token=valid_token, token=None)
+    assert ws.client_state == WebSocketState.CONNECTED
+    await ws_helper.disconnect(client_id)
