@@ -29,4 +29,21 @@ For more, see the [docs/README.md](docs/README.md) index.
 
 ---
 
-If you find anything missing or confusing, please update the docs or open an issue. Happy onboarding! 🎉 
+If you find anything missing or confusing, please update the docs or open an issue. Happy onboarding! 🎉
+
+---
+
+## 🤖 AI-IDE Onboarding API
+
+To serve onboarding, rules, and knowledge graph data via HTTP for AI-IDE tools:
+
+```bash
+make -f Makefile.ai ai-ide-api-build   # Build the Docker image
+make -f Makefile.ai ai-ide-api-up      # Start the API at http://localhost:8080
+make -f Makefile.ai ai-ide-api-down    # Stop the API
+```
+
+Example endpoints:
+- http://localhost:8080/metadata
+- http://localhost:8080/rules
+- http://localhost:8080/knowledge-graph 

@@ -162,4 +162,19 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 See [docs/admin_endpoints.md](docs/admin_endpoints.md) for a full guide to all admin-only API endpoints, including usage tips and example requests.
 
 - **Troubleshooting & Environment Issues:** [docs/env_troubleshooting.md](docs/env_troubleshooting.md)
-- **Known Issues:** [KNOWN_ISSUES.md](KNOWN_ISSUES.md) 
+- **Known Issues:** [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
+
+## AI-IDE Onboarding API
+
+To serve onboarding, rules, and knowledge graph data via HTTP for AI-IDE tools:
+
+```bash
+make -f Makefile.ai ai-ide-api-build   # Build the Docker image
+make -f Makefile.ai ai-ide-api-up      # Start the API at http://localhost:8080
+make -f Makefile.ai ai-ide-api-down    # Stop the API
+```
+
+Example endpoints:
+- [http://localhost:8080/metadata](http://localhost:8080/metadata)
+- [http://localhost:8080/rules](http://localhost:8080/rules)
+- [http://localhost:8080/knowledge-graph](http://localhost:8080/knowledge-graph) 
