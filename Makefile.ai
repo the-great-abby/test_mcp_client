@@ -552,7 +552,7 @@ ai-troubleshoot:
 
 .PHONY: ai-ide-api-build ai-ide-api-up ai-ide-api-down
 ai-ide-api-build:
-	docker build -t ai-ide-api ./ai-ide-api
+	docker build -f ai-ide-api/Dockerfile -t ai-ide-api .
 
 ai-ide-api-up:
 	docker run --rm -d -p 8080:8080 --name ai-ide-api \
