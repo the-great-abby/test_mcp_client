@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Build test environment
-        run: docker compose -f docker-compose.test.yml build
+        run: make test-build
       - name: Run migrations
         run: make db-upgrade ENV=test
       - name: Install pytest

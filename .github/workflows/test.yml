@@ -8,17 +8,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:15
-        ports: [5432:5432]
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: mcp_chat
-      redis:
-        image: redis:7
-        ports: [6379:6379]
+    #services:
+    #  postgres:
+    #    image: postgres:15
+    #    ports: [5432:5432]
+    #    env:
+    #      POSTGRES_USER: postgres
+    #      POSTGRES_PASSWORD: postgres
+    #      POSTGRES_DB: mcp_chat
+    #  redis:
+    #    image: redis:7
+    #    ports: [6379:6379]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -30,8 +30,8 @@ jobs:
         with:
           node-version: '18'
       - name: Install dependencies
-        run: make dev-build
+        run: make test-build
       - name: Run migrations
-        run: make migrate
+        run: make db-upgrade ENV=test
       - name: Run all tests (AI-IDE style)
         run: make -f Makefile.ai ai-test-unit PYTEST_ARGS="-x" 
