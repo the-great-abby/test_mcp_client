@@ -522,5 +522,10 @@ endif
 db-upgrade:
 	docker compose -f $(DB_COMPOSE_FILE) exec $(DB_SERVICE) alembic upgrade head
 
+# Build test containers
+# Usage: make test-build
+test-build:
+	docker compose -f docker-compose.test.yml build
+
 .DEFAULT_GOAL := dev 
 
