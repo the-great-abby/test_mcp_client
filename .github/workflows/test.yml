@@ -31,5 +31,7 @@ jobs:
           node-version: '18'
       - name: Install dependencies
         run: make dev-build
+      - name: Run migrations
+        run: make migrate
       - name: Run all tests (AI-IDE style)
         run: make -f Makefile.ai ai-test-unit PYTEST_ARGS="-x" 
