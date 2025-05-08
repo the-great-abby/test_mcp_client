@@ -108,4 +108,55 @@ alwaysApply: false
     - For collaborative debugging and development, follow the [AI Pair Programming & Debugging Workflow](mdc:.cursor/rules/ai_pair_programming_workflow.mdc).
 
 # Related Rules
-- [ai_pair_programming_workflow.mdc](mdc:.cursor/rules/ai_pair_programming_workflow.mdc) - AI Pair Programming & Debugging Workflow 
+- [ai_pair_programming_workflow.mdc](mdc:.cursor/rules/ai_pair_programming_workflow.mdc) - AI Pair Programming & Debugging Workflow
+
+# Server Memory Export Rule
+
+- **Purpose:**
+  - Ensure the project's knowledge graph (server memory) is periodically exported for transparency, team knowledge sharing, and documentation.
+
+- **Export Frequency:**
+  - Recommended: After major architectural changes, feature launches, or at least once per development cycle (e.g., weekly or per sprint).
+  - Can be automated as a CI/CD or Makefile target.
+
+- **Export Format:**
+  - Use Markdown with Mermaid diagrams for maximum compatibility and readability (e.g., `docs/cursor_knowledge_graph.md`).
+  - Include all major entities, relationships, and recent observations.
+
+- **Best Practices:**
+  - Announce new exports in team channels or PRs.
+  - Link exported diagrams in onboarding and architecture docs.
+  - Review and update the export process as the project evolves.
+  - Ensure exports are versioned or timestamped for historical reference.
+
+- **Example:**
+  - See `docs/cursor_knowledge_graph.md` for a sample export.
+
+---
+description: Always update the 'Last updated' timestamp in onboarding docs when making changes.
+globs:
+  - WELCOME.md
+  - docs/onboarding.md
+  - docs/ai-onboarding.md
+alwaysApply: true
+---
+# Onboarding Docs Last Updated Timestamp Rule
+
+## When to Update
+- Any time you make changes to onboarding documentation (WELCOME.md, docs/onboarding.md, docs/ai-onboarding.md), update the 'Last updated' timestamp at the top of the file.
+
+## Required Actions
+- Edit the 'Last updated' line to reflect the current date (YYYY-MM-DD).
+- Reviewers should check that the timestamp is current for any PR that modifies onboarding docs.
+
+## Checklist for PRs
+- [ ] 'Last updated' timestamp is current in all modified onboarding docs.
+
+## Rationale
+- Keeps users informed about the freshness of onboarding materials.
+- Helps maintainers track when onboarding was last reviewed or improved.
+
+## Example
+```
+Last updated: 2024-05-08
+``` 

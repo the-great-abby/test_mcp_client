@@ -44,41 +44,16 @@ See the [Quickstart Guides](#quickstart-guides) for full usage details.
 
 ## 📚 Documentation Index
 
-- **[Project Overview & Quick Start](../README.md)**  
-  High-level project description, prerequisites, setup, and contribution guidelines.
+Welcome! Here are the most important diagrams and docs to help you understand and contribute to the project:
 
-- **[Knowledge Graph](cursor_knowledge_graph.md)**  
-  Visual and semantic map of project entities, relationships, and features.
+- **System Architecture Diagram:** [docs/architecture.md](architecture.md)
+- **Knowledge Graph (visual map):** [docs/cursor_knowledge_graph.md](cursor_knowledge_graph.md)
+- **Rules Index (conventions & best practices):** [docs/rules_index.md](rules_index.md)
+- **Onboarding Guide:** [docs/onboarding.md](onboarding.md)
+- **AI/LLM Onboarding:** [docs/ai-onboarding.md](ai-onboarding.md)
+- **Troubleshooting Guide:** [docs/env_troubleshooting.md](env_troubleshooting.md)
 
-- **[Admin API Endpoints](admin_endpoints.md)**  
-  Full guide to all admin-only API endpoints, usage tips, and example requests.
-
-- **[Database Migrations](migrations.md)**  
-  How to manage and apply database schema changes.
-
-- **[Code Index](code_index.md)**  
-  Auto-generated index of codebase modules, classes, and functions.
-
-- **[Rules Index](rules_index.md)** & **[Rules Relationships](rules_relationships.md)**  
-  Documentation of project rules, conventions, and their relationships.
-
-- **[Request Lifecycle Story](request_lifecycle_story.md)**  
-  (To be expanded) Narrative of a typical request's journey through the system.
-
-- **[Architecture Diagram](architecture.md)**  
-  High-level system architecture overview (Mermaid diagram).
-
-- **[Data Flow Diagrams](message_data_flow.md)**  
-  Key data flow diagrams for chat, authentication, and admin actions.
-
-- **[Database Schema](db_schema.md)**  
-  Database schema overview and ER diagram.
-
-- **[API Documentation](api_docs.md)**  
-  Backend API docs, authentication, and example requests.
-
-- **[Developer Workflows](workflows.md)**  
-  Developer workflows: local dev loop, Makefile usage, and more.
+For more, browse the sections below or return to [WELCOME.md](../WELCOME.md).
 
 ---
 

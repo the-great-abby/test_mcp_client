@@ -1,5 +1,6 @@
 # MCP Chat Client
 
+[![Onboarding Health](https://img.shields.io/badge/onboarding%20health-🌱%20fresh-brightgreen?style=flat&logo=github)](docs/onboarding.md)
 [![Onboarding Complete](https://img.shields.io/badge/onboarding-✅%20complete-brightgreen?style=flat&logo=book)](docs/onboarding.md)
 [![AI-IDE Ready](https://img.shields.io/badge/AI--IDE-🤖%20ready-brightgreen?style=flat&logo=robotframework)](WELCOME.md)
 [![Rule Coverage](https://img.shields.io/badge/rules-📜%20100%25-brightgreen?style=flat&logo=scroll)](docs/rules_index.md)

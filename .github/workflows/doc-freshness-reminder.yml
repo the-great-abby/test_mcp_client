@@ -1,0 +1,36 @@
+name: Onboarding Docs Freshness Reminder
+
+on:
+  schedule:
+    - cron: '0 12 1 1,4,7,10 *'  # At 12:00 on the 1st day of Jan, Apr, Jul, Oct (quarterly)
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create onboarding docs freshness reminder issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'Quarterly Onboarding Docs Review Reminder';
+            const body = `It's time for the quarterly review of onboarding docs!\n\nPlease review and update:\n- WELCOME.md\n- docs/onboarding.md\n- docs/ai-onboarding.md\n\nCheck for accuracy, completeness, and recent enhancements.\n\n(Automated reminder)`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'maintenance,docs'
+            });
+            const exists = issues.some(issue => issue.title === title);
+            if (!exists) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['maintenance', 'docs']
+              });
+            } else {
+              console.log('Reminder issue already exists.');
+            } 
