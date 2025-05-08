@@ -33,6 +33,8 @@ jobs:
           node-version: '18'
       - name: Install dependencies
         run: make test-build
+      - name: Start test environment
+        run: docker compose -f docker-compose.test.yml up -d
       - name: Run migrations
         run: make db-upgrade ENV=test
       - name: Run all tests (AI-IDE style)
