@@ -136,4 +136,40 @@ def ai_ide_self_test():
             "present": present,
             "last_modified": last_modified
         })
-    return {"checklist": checklist, "config_version": config.get("version")} 
+    return {"checklist": checklist, "config_version": config.get("version")}
+
+@app.get("/ai-ide-suggestions")
+def ai_ide_suggestions():
+    log_path = os.path.join(ROOT_DIR, "ai_ide_analytics.log")
+    suggestions = []
+    events = set()
+    if os.path.exists(log_path):
+        with open(log_path) as f:
+            for line in f:
+                parts = line.strip().split(',')
+                if len(parts) > 1:
+                    events.add(parts[1])
+    # Suggest onboarding checklist if not completed
+    if "onboarding_completed" not in events:
+        suggestions.append("You haven't completed onboarding yet. Run 'bash onboarding_checklist.sh' to get started.")
+    # Suggest .env validation
+    if "validated_env" not in events:
+        suggestions.append("You haven't validated your .env. Run 'bash validate_env.sh' to check for missing variables.")
+    # Suggest running tests
+    if "ran_tests" not in events and "ai-test" not in events:
+        suggestions.append("You haven't run the test suite. Use 'make -f Makefile.ai ai-test PYTEST_ARGS=\"-x\"'.")
+    # Suggest troubleshooting wizard if test failures or issues
+    if "test_failed" in events or "troubleshooting_needed" in events:
+        suggestions.append("You may want to run 'bash onboarding_wizard.sh' for troubleshooting tips.")
+    # Suggest submitting feedback
+    if "feedback_submitted" not in events:
+        suggestions.append("Help us improve onboarding by running 'bash submit_onboarding_feedback.sh'.")
+    # Suggest reading rules index
+    if "read_rules" not in events:
+        suggestions.append("Check out the project rules in 'docs/rules_index.md' for best practices.")
+    # Suggest running analytics script
+    if "onboarding_started" not in events:
+        suggestions.append("Log your onboarding progress with 'bash ai_ide_analytics.sh onboarding_started <user_type>'.")
+    if not suggestions:
+        suggestions.append("🎉 All key onboarding steps detected! You're ready to contribute.")
+    return {"suggestions": suggestions} 

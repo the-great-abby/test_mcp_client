@@ -212,3 +212,14 @@ A: Run `bash submit_onboarding_feedback.sh` or open an issue/discussion on GitHu
   This prints a summary of onboarding events, event counts, user types, and first/last event timestamps.
 
 > Analytics are opt-in and local-only by default. Use these tools to track onboarding trends and improve the experience for future contributors and AI-IDEs.
+
+---
+
+## 🤖 AI-IDE Smart Suggestions API
+
+- **Get personalized onboarding suggestions:**
+  - Endpoint: `/ai-ide-suggestions` (when running the API container)
+  - Example: `http://localhost:8080/ai-ide-suggestions`
+  - Returns a list of smart, actionable suggestions based on your onboarding analytics log (e.g., missing steps, recommended actions).
+
+> Use this endpoint to get tailored next steps for onboarding—great for both AI-IDEs and human users!
