@@ -502,21 +502,21 @@ env-restore:
 #   make db-upgrade ENV=test
 #   make db-upgrade ENV=staging
 #   make db-upgrade ENV=prod
-DB_ENV ?=dev
-ifeq ($(DB_ENV),dev)
+ENV ?=dev
+ifeq ($(ENV),dev)
 	DB_COMPOSE_FILE=docker-compose.dev.yml
 	DB_SERVICE=backend
-else ifeq ($(DB_ENV),test)
+else ifeq ($(ENV),test)
 	DB_COMPOSE_FILE=docker-compose.test.yml
 	DB_SERVICE=backend-test
-else ifeq ($(DB_ENV),staging)
+else ifeq ($(ENV),staging)
 	DB_COMPOSE_FILE=docker-compose.staging.yml
 	DB_SERVICE=backend
-else ifeq ($(DB_ENV),prod)
+else ifeq ($(ENV),prod)
 	DB_COMPOSE_FILE=docker-compose.prod.yml
 	DB_SERVICE=backend
 else
-	$(error Unknown ENV '$(DB_ENV)'. Use dev, test, staging, or prod)
+	$(error Unknown ENV '$(ENV)'. Use dev, test, staging, or prod)
 endif
 
 db-upgrade:
