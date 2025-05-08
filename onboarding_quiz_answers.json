@@ -1,0 +1,12 @@
+{
+  "1": "make -f Makefile.ai ai-test PYTEST_ARGS=\"-x\"",
+  "2": ".env.example",
+  "3": "docs/rules_index.md",
+  "4": "bash validate_env.sh",
+  "5": "Use Docker service names and internal ports",
+  "6": "docs/architecture.md",
+  "7": "Edit docs or open a PR, see CONTRIBUTING.md",
+  "8": "ai_onboarding_checklist.sh",
+  "9": "KNOWN_ISSUES.md or docs/env_troubleshooting.md",
+  "10": "submit_onboarding_feedback.sh or open an issue"
+} 

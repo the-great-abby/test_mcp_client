@@ -18,7 +18,15 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install dependencies
-        run: make dev-build
+      - name: Generate .env.test file
+        run: make envtest-file
+      - name: Build test environment
+        run: docker compose -f docker-compose.test.yml build
+      - name: Start test environment
+        run: docker compose -f docker-compose.test.yml up backend-test frontend-test -d
+      - name: Run migrations
+        run: make db-upgrade ENV=test
+      - name: Install pytest
+        run: pip install pytest
       - name: Run onboarding health check
-        run: make ai-onboarding-health 
+        run: make ai-onboarding-health

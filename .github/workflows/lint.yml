@@ -18,11 +18,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+      - name: Generate .env.test file
+        run: make envtest-file
       - name: Install dependencies
-        run: make dev-build
+        run: docker compose -f docker-compose.test.yml build
+      - name: Start test environment
+        run: docker compose -f docker-compose.test.yml up -d
+    #- name: Install Docker Compose plugin
+      #  run: |
+      #    sudo apt-get update
+      #    sudo apt-get install -y docker-compose-plugin
+      #- name: Run migrations
+      #  run: make db-upgrade ENV=test
+      - name: Install pytest
+        run: pip install pytest      
       - name: Run Python linter
         run: make lint || true  # Replace with your actual lint command
       - name: Run rules linter
         run: python lint_rules.py
+      - name: Run frontend
+        run: docker compose -f docker-compose.test.yml up -d frontend-test
       - name: Run Prettier
         run: make frontend-format 
