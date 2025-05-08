@@ -18,6 +18,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+      - name: Generate .env.test file
+        run: make envtest-file
       - name: Install dependencies
         run: docker compose -f docker-compose.test.yml build
       - name: Start test environment

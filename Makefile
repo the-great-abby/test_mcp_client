@@ -527,5 +527,21 @@ db-upgrade:
 test-build:
 	docker compose -f docker-compose.test.yml build
 
+# Generate .env.test file with sensible defaults
+# Usage: make envtest-file
+envtest-file:
+	@echo '# Auto-generated .env.test for test environment' > .env.test
+	@echo 'ENVIRONMENT=test' >> .env.test
+	@echo 'POSTGRES_HOST=db-test' >> .env.test
+	@echo 'POSTGRES_PORT=5432' >> .env.test
+	@echo 'POSTGRES_USER=postgres' >> .env.test
+	@echo 'POSTGRES_PASSWORD=postgres' >> .env.test
+	@echo 'POSTGRES_DB=test_db' >> .env.test
+	@echo 'REDIS_HOST=redis-test' >> .env.test
+	@echo 'REDIS_PORT=6379' >> .env.test
+	@echo 'JWT_SECRET_KEY=test_secret_key_123' >> .env.test
+	@echo 'JWT_ALGORITHM=HS256' >> .env.test
+	@echo 'DATABASE_URL=postgresql+asyncpg://postgres:postgres@db-test:5432/test_db' >> .env.test
+
 .DEFAULT_GOAL := dev 
 

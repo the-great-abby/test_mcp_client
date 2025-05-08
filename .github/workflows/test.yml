@@ -20,6 +20,8 @@ jobs:
     #    image: redis:7
     #    ports: [6379:6379]
     steps:
+      - name: Generate .env.test file
+        run: make envtest-file
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: actions/setup-python@v5
