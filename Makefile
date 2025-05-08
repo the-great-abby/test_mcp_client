@@ -497,5 +497,30 @@ env-restore:
 	  echo "[env-restore] No .env.last_backup symlink or backup file found."; \
 	fi
 
+# Usage:
+#   make db-upgrade ENV=dev     # (default)
+#   make db-upgrade ENV=test
+#   make db-upgrade ENV=staging
+#   make db-upgrade ENV=prod
+DB_ENV ?=dev
+ifeq ($(DB_ENV),dev)
+	DB_COMPOSE_FILE=docker-compose.dev.yml
+	DB_SERVICE=backend
+else ifeq ($(DB_ENV),test)
+	DB_COMPOSE_FILE=docker-compose.test.yml
+	DB_SERVICE=backend-test
+else ifeq ($(DB_ENV),staging)
+	DB_COMPOSE_FILE=docker-compose.staging.yml
+	DB_SERVICE=backend
+else ifeq ($(DB_ENV),prod)
+	DB_COMPOSE_FILE=docker-compose.prod.yml
+	DB_SERVICE=backend
+else
+	$(error Unknown ENV '$(DB_ENV)'. Use dev, test, staging, or prod)
+endif
+
+db-upgrade:
+	docker compose -f $(DB_COMPOSE_FILE) exec $(DB_SERVICE) alembic upgrade head
+
 .DEFAULT_GOAL := dev 
 

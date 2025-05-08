@@ -19,11 +19,15 @@ jobs:
         with:
           node-version: '18'
       - name: Install dependencies
-        run: make dev-build
+        run: make test-build
       - name: Install Docker Compose plugin
         run: |
           sudo apt-get update
           sudo apt-get install -y docker-compose-plugin
+      - name: Run migrations
+        run: make db-upgrade ENV=test
+      - name: Install pytest
+        run: pip install pytest      
       - name: Run Python linter
         run: make lint || true  # Replace with your actual lint command
       - name: Run rules linter
