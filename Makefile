@@ -2,26 +2,26 @@
 
 # Development commands
 dev:
-	docker-compose -f docker-compose.dev.yml up
+	docker compose -f docker-compose.dev.yml up
 
 dev-build:
-	docker-compose -f docker-compose.dev.yml up --build
+	docker compose -f docker-compose.dev.yml up --build
 
 # Stop all containers
 stop:
-	docker-compose -f docker-compose.dev.yml down
+	docker compose -f docker-compose.dev.yml down
 
 # Clean up containers, volumes, and images
 clean:
-	docker-compose -f docker-compose.dev.yml down -v
+	docker compose -f docker-compose.dev.yml down -v
 	docker system prune -f
 
 # View logs
 logs:
-	docker-compose -f docker-compose.dev.yml logs -f
+	docker compose -f docker-compose.dev.yml logs -f
 
 test-logs:
-	docker-compose -f docker-compose.test.yml logs -f
+	docker compose -f docker-compose.test.yml logs -f
 
 # Set default compose file and service for migrations
 COMPOSE_FILE ?= docker-compose.dev.yml
@@ -39,7 +39,7 @@ alembic-setup:
 #   make migrate-init [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
 #   make migrate-init COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate-init: alembic-setup
-	docker-compose -f $(COMPOSE_FILE) exec \
+	docker compose -f $(COMPOSE_FILE) exec \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=postgres \
 		-e POSTGRES_HOST=postgres \
@@ -52,7 +52,7 @@ migrate-init: alembic-setup
 #   make migrate [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
 #   make migrate COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate: alembic-setup
-	docker-compose -f $(COMPOSE_FILE) exec \
+	docker compose -f $(COMPOSE_FILE) exec \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=postgres \
 		-e POSTGRES_HOST=postgres \
@@ -65,13 +65,13 @@ migrate: alembic-setup
 #   make migrate-create name=desc [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
 #   make migrate-create name=desc COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate-create: alembic-setup
-	@docker-compose -f $(COMPOSE_FILE) exec -T $(SERVICE) python3 /app/scripts/create_migration.py "$(name)"
+	@docker compose -f $(COMPOSE_FILE) exec -T $(SERVICE) python3 /app/scripts/create_migration.py "$(name)"
 
 # Usage:
 #   make migrate-rollback [COMPOSE_FILE=docker-compose.dev.yml] [SERVICE=backend]
 #   make migrate-rollback COMPOSE_FILE=docker-compose.test.yml SERVICE=backend-test
 migrate-rollback: alembic-setup
-	docker-compose -f $(COMPOSE_FILE) exec \
+	docker compose -f $(COMPOSE_FILE) exec \
 		-e POSTGRES_USER=postgres \
 		-e POSTGRES_PASSWORD=postgres \
 		-e POSTGRES_HOST=postgres \
@@ -83,41 +83,41 @@ migrate-rollback: alembic-setup
 # Test commands
 test-setup:
 	@echo "🔧 Setting up test environment..."
-	@docker-compose -f docker-compose.test.yml build
-	@docker-compose -f docker-compose.test.yml up -d
+	@docker compose -f docker-compose.test.yml build
+	@docker compose -f docker-compose.test.yml up -d
 	@chmod +x scripts/wait-for-services.sh
 	@echo "⏳ Waiting for services to be ready..."
-	@docker-compose -f docker-compose.test.yml exec backend-test /app/scripts/wait-for-services.sh || (echo "❌ Services failed to start" && exit 1)
+	@docker compose -f docker-compose.test.yml exec backend-test /app/scripts/wait-for-services.sh || (echo "❌ Services failed to start" && exit 1)
 	@echo "✅ Test environment ready"
 
 test: test-setup
 	@echo "🧪 Running tests..."
-	@docker-compose -f docker-compose.test.yml exec backend-test pytest -vv $(ARGS) || (echo "❌ Tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml exec backend-test pytest -vv $(ARGS) || (echo "❌ Tests failed" && exit 1)
 	@echo "✅ Tests completed successfully"
 
 test-unit: test-setup
 	@echo "🧪 Running unit tests..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -m "not integration and not e2e" || (echo "❌ Unit tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml run --rm backend-test pytest -m "not integration and not e2e" || (echo "❌ Unit tests failed" && exit 1)
 	@echo "✅ Unit tests completed successfully"
 
 test-integration: test-setup
 	@echo "🧪 Running integration tests..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -m integration || (echo "❌ Integration tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml run --rm backend-test pytest -m integration || (echo "❌ Integration tests failed" && exit 1)
 	@echo "✅ Integration tests completed successfully"
 
 test-e2e: test-setup
 	@echo "🧪 Running end-to-end tests..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest -m e2e || (echo "❌ E2E tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml run --rm backend-test pytest -m e2e || (echo "❌ E2E tests failed" && exit 1)
 	@echo "✅ E2E tests completed successfully"
 
 test-coverage: test-setup
 	@echo "📊 Running tests with coverage report..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest --cov=app --cov-report=html || (echo "❌ Coverage tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml run --rm backend-test pytest --cov=app --cov-report=html || (echo "❌ Coverage tests failed" && exit 1)
 	@echo "✅ Coverage report generated successfully"
 
 test-clean:
 	@echo "🧹 Cleaning up test environment..."
-	@docker-compose -f docker-compose.test.yml down -v
+	@docker compose -f docker-compose.test.yml down -v
 	@rm -rf backend/htmlcov
 	@rm -rf backend/.coverage
 	@rm -rf backend/test-reports
@@ -125,20 +125,20 @@ test-clean:
 
 test-async: test-setup
 	@echo "🧪 Running async tests..."
-	@docker-compose -f docker-compose.test.yml exec backend-test pytest -vv tests/async || (echo "❌ Async tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml exec backend-test pytest -vv tests/async || (echo "❌ Async tests failed" && exit 1)
 	@echo "✅ Async tests completed successfully"
 
 test-async-logs:
-	@docker-compose -f docker-compose.test.yml logs -f backend-test | tee test-async.log
+	@docker compose -f docker-compose.test.yml logs -f backend-test | tee test-async.log
 
 test-unit-dir: test-setup
 	@echo "🧪 Running unit tests (directory)..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest tests/unit || (echo "❌ Unit tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml run --rm backend-test pytest tests/unit || (echo "❌ Unit tests failed" && exit 1)
 	@echo "✅ Unit tests completed successfully"
 
 test-integration-dir: test-setup
 	@echo "🧪 Running integration tests (directory)..."
-	@docker-compose -f docker-compose.test.yml run --rm backend-test pytest tests/integration || (echo "❌ Integration tests failed" && exit 1)
+	@docker compose -f docker-compose.test.yml run --rm backend-test pytest tests/integration || (echo "❌ Integration tests failed" && exit 1)
 	@echo "✅ Integration tests completed successfully"
 
 # Show help
@@ -163,14 +163,14 @@ help:
 
 # AI-friendly commands that don't block
 ai-build:
-	docker-compose -f docker-compose.dev.yml build
+	docker compose -f docker-compose.dev.yml build
 
 ai-logs:
-	docker-compose -f docker-compose.dev.yml logs
+	docker compose -f docker-compose.dev.yml logs
 
 ai-restart:
-	docker-compose -f docker-compose.dev.yml down
-	docker-compose -f docker-compose.dev.yml up -d
+	docker compose -f docker-compose.dev.yml down
+	docker compose -f docker-compose.dev.yml up -d
 
 # Development environment checks
 check-dev:
@@ -229,15 +229,15 @@ set-task-done:
 
 # Open an interactive shell in backend-test (test environment)
 backend-test-shell:
-	docker-compose -f docker-compose.test.yml exec backend-test /bin/bash
+	docker compose -f docker-compose.test.yml exec backend-test /bin/bash
 
 # Open an interactive shell in backend (dev environment)
 backend-shell:
-	docker-compose -f docker-compose.dev.yml exec backend /bin/bash
+	docker compose -f docker-compose.dev.yml exec backend /bin/bash
 
 # Apply Alembic migrations in the dev environment
 migrate-dev:
-	docker-compose -f docker-compose.dev.yml exec backend alembic upgrade head
+	docker compose -f docker-compose.dev.yml exec backend alembic upgrade head
 
 # Set the status of a task or subtask
 # Usage: make set-task-status TASK_ID=<id> STATUS=<status>
@@ -251,7 +251,7 @@ set-task-status:
 
 # Run only the admin integration tests
 pytest-integration-admin:
-	docker-compose -f docker-compose.test.yml exec backend-test pytest -vv tests/integration/test_admin.py
+	docker compose -f docker-compose.test.yml exec backend-test pytest -vv tests/integration/test_admin.py
 
 # --- Admin UI (Svelte) ---
 admin-ui-build:
@@ -369,14 +369,14 @@ staging-shell-backend:
 env-status:
 	@echo "\n🔎 Environment Status Overview\n-----------------------------"
 	@echo "\n[Dev Environment] (docker-compose.dev.yml):"
-	@docker-compose -f docker-compose.dev.yml ps || echo "(not present)"
+	@docker compose -f docker-compose.dev.yml ps || echo "(not present)"
 	@echo "\n[Test Environment] (docker-compose.test.yml):"
-	@docker-compose -f docker-compose.test.yml ps || echo "(not present)"
+	@docker compose -f docker-compose.test.yml ps || echo "(not present)"
 	@echo "\n[Staging Environment] (docker-compose.staging.yml):"
 	@docker compose -f docker-compose.staging.yml ps || echo "(not present)"
 	@echo "\nSummary:"
-	@dev=$$(docker-compose -f docker-compose.dev.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
-	test=$$(docker-compose -f docker-compose.test.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
+	@dev=$$(docker compose -f docker-compose.dev.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
+	test=$$(docker compose -f docker-compose.test.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
 	staging=$$(docker compose -f docker-compose.staging.yml ps --services --filter "status=running" | wc -l | tr -d ' '); \
 	if [ $$dev -gt 0 ]; then echo "  🟢 Dev environment: $$dev containers running"; fi; \
 	if [ $$test -gt 0 ]; then echo "  🟡 Test environment: $$test containers running"; fi; \
@@ -385,28 +385,28 @@ env-status:
 
 # Frontend (React/Vite) containerized commands
 frontend-shell:
-	docker-compose -f docker-compose.dev.yml exec frontend sh
+	docker compose -f docker-compose.dev.yml exec frontend sh
 
 frontend-install:
-	docker-compose -f docker-compose.dev.yml exec frontend npm install
+	docker compose -f docker-compose.dev.yml exec frontend npm install
 
 frontend-dev:
-	docker-compose -f docker-compose.dev.yml exec frontend npm run dev
+	docker compose -f docker-compose.dev.yml exec frontend npm run dev
 
 frontend-build:
-	docker-compose -f docker-compose.dev.yml exec frontend npm run build
+	docker compose -f docker-compose.dev.yml exec frontend npm run build
 
 frontend-preview:
-	docker-compose -f docker-compose.dev.yml exec frontend npm run preview
+	docker compose -f docker-compose.dev.yml exec frontend npm run preview
 
 frontend-lint:
-	docker-compose -f docker-compose.dev.yml exec frontend npm run lint
+	docker compose -f docker-compose.dev.yml exec frontend npm run lint
 
 frontend-format:
-	docker-compose -f docker-compose.dev.yml exec frontend npx prettier --write .
+	docker compose -f docker-compose.dev.yml exec frontend npx prettier --write .
 
 frontend-test:
-	docker-compose -f docker-compose.dev.yml exec frontend npm run test
+	docker compose -f docker-compose.dev.yml exec frontend npm run test
 
 # One-command environment switchers
 switch-to-dev:
@@ -435,28 +435,28 @@ switch-to-staging:
 
 # Database management helpers (generic, customize as needed)
 db-seed-dev:
-	docker-compose -f docker-compose.dev.yml exec backend python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
+	docker compose -f docker-compose.dev.yml exec backend python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
 
 db-seed-test:
-	docker-compose -f docker-compose.test.yml exec backend-test python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
+	docker compose -f docker-compose.test.yml exec backend-test python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
 
 db-seed-staging:
 	docker compose -f docker-compose.staging.yml exec backend python /app/scripts/seed_db.py || echo "(Add scripts/seed_db.py to customize seeding)"
 
 db-reset-dev:
-	docker-compose -f docker-compose.dev.yml exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS mcp_chat; CREATE DATABASE mcp_chat;"
+	docker compose -f docker-compose.dev.yml exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS mcp_chat; CREATE DATABASE mcp_chat;"
 
 db-reset-test:
-	docker-compose -f docker-compose.test.yml exec db-test psql -U postgres -c "DROP DATABASE IF EXISTS test_db; CREATE DATABASE test_db;"
+	docker compose -f docker-compose.test.yml exec db-test psql -U postgres -c "DROP DATABASE IF EXISTS test_db; CREATE DATABASE test_db;"
 
 db-reset-staging:
 	docker compose -f docker-compose.staging.yml exec postgres psql -U postgres -c "DROP DATABASE IF EXISTS mcp_chat; CREATE DATABASE mcp_chat;"
 
 db-backup-dev:
-	docker-compose -f docker-compose.dev.yml exec postgres pg_dump -U postgres mcp_chat > dev_db_backup.sql
+	docker compose -f docker-compose.dev.yml exec postgres pg_dump -U postgres mcp_chat > dev_db_backup.sql
 
 db-backup-test:
-	docker-compose -f docker-compose.test.yml exec db-test pg_dump -U postgres test_db > test_db_backup.sql
+	docker compose -f docker-compose.test.yml exec db-test pg_dump -U postgres test_db > test_db_backup.sql
 
 db-backup-staging:
 	docker compose -f docker-compose.staging.yml exec postgres pg_dump -U postgres mcp_chat > staging_db_backup.sql
