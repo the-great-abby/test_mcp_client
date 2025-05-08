@@ -22,5 +22,7 @@ jobs:
         run: make dev-build
       - name: Run migrations
         run: make migrate
+      - name: Install pytest
+        run: pip install pytest
       - name: Run onboarding health check
         run: make ai-onboarding-health
