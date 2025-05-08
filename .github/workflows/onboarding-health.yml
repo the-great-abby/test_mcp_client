@@ -20,5 +20,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: make dev-build
+      - name: Run migrations
+        run: make migrate
       - name: Run onboarding health check
-        run: make ai-onboarding-health 
+        run: make ai-onboarding-health
