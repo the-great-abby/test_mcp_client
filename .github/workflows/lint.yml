@@ -36,5 +36,7 @@ jobs:
         run: make lint || true  # Replace with your actual lint command
       - name: Run rules linter
         run: python lint_rules.py
+      - name: Run frontend
+        run: docker compose -f docker-compose.test.yml up -d frontend-test
       - name: Run Prettier
         run: make frontend-format 
